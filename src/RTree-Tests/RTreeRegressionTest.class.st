@@ -374,3 +374,43 @@ RTreeRegressionTest >> testSmallMovesUpdateInPlace [
 		0 to: 1000 by: 41 do: [ :y |
 			self assert: (tree entriesAtPoint: x @ y) asArray equals: (list entriesAtPoint: x @ y) asArray ] ]
 ]
+
+{ #category : 'tests - finding' }
+RTreeRegressionTest >> testEntriesAtRectangleOrder [
+	"The result is in entryIndex order, with or without the shortcut of the contained nodes
+	and the placement by index"
+	| tree list boxes random windows |
+	tree := RTreeCollection new.
+	list := RTSequenceableCollection new.
+	boxes := self randomBoxes: 2000 seed: 21.
+	boxes do: [ :each | list add: each ].
+	random := Random seed: 22.
+	(boxes copy shuffleBy: random) do: [ :each | tree add: each ].
+	windows := OrderedCollection new.
+	windows
+		add: (-10 @ -10 corner: 1020 @ 1020);
+		add: (0 @ 0 corner: 1010 @ 1010);
+		add: (0 @ 0 corner: 500 @ 1010);
+		add: (300 @ 300 corner: 700 @ 400);
+		add: (450 @ 450 corner: 460 @ 460).
+	20 timesRepeat: [ windows add: ((random next * 1000) @ (random next * 1000) extent: (random next * 600) @ (random next * 600)) ].
+	windows do: [ :w |
+		self assert: (tree entriesAtRectangle: w) asArray equals: (list entriesAtRectangle: w) asArray ]
+]
+
+{ #category : 'tests - finding' }
+RTreeRegressionTest >> testEntriesAtRectangleWithRepeatedOrSparseIndexes [
+	"The placement by index must not lose entries that share an index"
+	| tree boxes all |
+	tree := RTreeCollection new.
+	boxes := self randomBoxes: 1000 seed: 23.
+	boxes do: [ :each | each entryIndex: each model \\ 7 ].
+	tree addAll: boxes.
+	all := tree entriesAtRectangle: (-10 @ -10 corner: 1020 @ 1020).
+	self assert: all size equals: 1000.
+	self assert: all asIdentitySet size equals: 1000.
+	self assert: ((1 to: 999) allSatisfy: [ :i | (all at: i) entryIndex <= (all at: i + 1) entryIndex ]).
+	boxes do: [ :each | each entryIndex: each model * 1000 ].
+	all := tree entriesAtRectangle: (-10 @ -10 corner: 1020 @ 1020).
+	self assert: (all collect: [ :each | each model ]) asArray equals: (1 to: 1000) asArray
+]

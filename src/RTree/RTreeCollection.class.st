@@ -115,9 +115,7 @@ RTreeCollection >> entriesAtRectangle: aRectangle [
 	outliers ifNotNil: [
 		outliers do: [ :each |
 			(each encompassingRectangle intersects: aRectangle) ifTrue: [ res add: each ] ] ].
-	"entryIndex is nil for an entry that no container numbered"
-	res sort: [:a :b | (a entryIndex ifNil: [ 0 ]) <= (b entryIndex ifNil: [ 0 ]) ].
-	^ res
+	^ self sortByEntryIndex: res
 ]
 
 { #category : 'accessing' }
@@ -322,6 +320,37 @@ RTreeCollection >> shouldSwap: anAssociation and: anAssociation2 [
 { #category : 'public' }
 RTreeCollection >> sortResultList: aCollection [
 	aCollection sort: [ :a :b | self shouldSwap: a and: b ]
+]
+
+{ #category : 'private - finding' }
+RTreeCollection >> sortByEntryIndex: aCollection [
+	"The drawing order. A container numbers its entries 1..n, so a large result is placed in an
+	Array indexed by entryIndex, O(n), instead of being sorted with a block, O(n log n).
+	Small results, sparse or repeated indexes and entries without entryIndex are sorted"
+	| min max buckets result |
+	aCollection size < 256 ifTrue: [ ^ self sortWithBlock: aCollection ].
+	min := SmallInteger maxVal.
+	max := SmallInteger minVal.
+	aCollection do: [ :each | | index |
+		index := each entryIndex.
+		index isInteger ifFalse: [ ^ self sortWithBlock: aCollection ].
+		index < min ifTrue: [ min := index ].
+		index > max ifTrue: [ max := index ] ].
+	max - min >= (aCollection size * 4) ifTrue: [ ^ self sortWithBlock: aCollection ].
+	buckets := Array new: max - min + 1.
+	aCollection do: [ :each | | slot |
+		slot := each entryIndex - min + 1.
+		(buckets at: slot) ifNotNil: [ ^ self sortWithBlock: aCollection ].
+		buckets at: slot put: each ].
+	result := OrderedCollection new: aCollection size.
+	buckets do: [ :each | each ifNotNil: [ result add: each ] ].
+	^ result
+]
+
+{ #category : 'private - finding' }
+RTreeCollection >> sortWithBlock: aCollection [
+	"entryIndex is nil for an entry that no container numbered"
+	^ aCollection sort: [ :a :b | (a entryIndex ifNil: [ 0 ]) <= (b entryIndex ifNil: [ 0 ]) ]
 ]
 
 { #category : 'update' }

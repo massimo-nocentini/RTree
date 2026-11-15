@@ -289,12 +289,20 @@ RTNode >> lrrotationZ: z y: y x: x [
 
 { #category : 'finding/searching' }
 RTNode >> nodesIntersetcsRectangle: aRectangle list: aCollection [
-	(self rectangle intersects: aRectangle) ifFalse: [ ^ self ].
-	self isLeaf ifTrue: [ aCollection add: self contents ]
-	ifFalse: [
-		self childrenDo: [ :child |
-			child nodesIntersetcsRectangle: aRectangle list: aCollection
-			 ] ]
+	| origin corner queryOrigin queryCorner |
+	(rectangle intersects: aRectangle) ifFalse: [ ^ self ].
+	left ifNil: [ ^ aCollection add: contents ].
+	"a node strictly inside aRectangle: every entry below intersects it, no need to test them.
+	Zoom to fit asks for the whole tree"
+	origin := rectangle origin.
+	corner := rectangle corner.
+	queryOrigin := aRectangle origin.
+	queryCorner := aRectangle corner.
+	(queryOrigin x < origin x and: [ queryOrigin y < origin y and: [
+		corner x < queryCorner x and: [ corner y < queryCorner y ] ] ])
+			ifTrue: [ ^ self do: [ :each | aCollection add: each ] ].
+	left nodesIntersetcsRectangle: aRectangle list: aCollection.
+	right nodesIntersetcsRectangle: aRectangle list: aCollection
 ]
 
 { #category : 'finding/searching' }
