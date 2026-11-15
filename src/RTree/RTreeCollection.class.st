@@ -78,7 +78,8 @@ RTreeCollection >> entriesAtPoint: aPoint [
 	root nodesWithPoint: aPoint list: res.
 	outliers ifNotNil: [
 		outliers do: [ :each | each addEntriesIn: res position: aPoint ] ].
-	res := res collect: [ :s | s -> s indexesFromRoot ].
+	"an entry without parent has no indexesFromRoot, its entryIndex orders it"
+	res := res collect: [ :s | s -> (s indexesFromRoot ifEmpty: [ Array with: (s entryIndex ifNil: [ 0 ]) ]) ].
 	self sortResultList: res.
 	^ res collect: [ :assoc | assoc key ]
 ]
@@ -91,7 +92,8 @@ RTreeCollection >> entriesAtRectangle: aRectangle [
 	outliers ifNotNil: [
 		outliers do: [ :each |
 			(each encompassingRectangle intersects: aRectangle) ifTrue: [ res add: each ] ] ].
-	res sort: [:a :b | a entryIndex < b entryIndex ].
+	"entryIndex is nil for an entry that no container numbered"
+	res sort: [:a :b | (a entryIndex ifNil: [ 0 ]) <= (b entryIndex ifNil: [ 0 ]) ].
 	^ res
 ]
 

@@ -162,3 +162,33 @@ RTreeRegressionTest >> testNodeCollect [
 	tree addAll: (self randomBoxes: 5 seed: 6).
 	self assert: (tree root collect: [ :each | each model ]) asArray sort equals: #( 1 2 3 4 5 )
 ]
+
+{ #category : 'tests - finding' }
+RTreeRegressionTest >> testEntriesAtPointOrderWithoutParent [
+	"Entries without parent had empty indexesFromRoot, so the topmost entry was not first"
+	| tree list boxes random |
+	tree := RTreeCollection new.
+	list := RTSequenceableCollection new.
+	random := Random seed: 8.
+	boxes := (1 to: 60) collect: [ :i |
+		self boxAt: (random next * 100) @ (random next * 100) extent: 30 @ 30 index: i ].
+	boxes do: [ :each | tree add: each. list add: each ].
+	0 to: 130 by: 5 do: [ :x |
+		0 to: 130 by: 5 do: [ :y |
+			self
+				assert: (tree entriesAtPoint: x @ y) asArray
+				equals: (list entriesAtPoint: x @ y) asArray ] ].
+	self assert: (tree entryAtPoint: 50 @ 50) identicalTo: (list entryAtPoint: 50 @ 50)
+]
+
+{ #category : 'tests - finding' }
+RTreeRegressionTest >> testEntriesAtRectangleWithoutEntryIndex [
+	"The sort by entryIndex failed when no container numbered the entries"
+	| tree box1 box2 |
+	tree := RTreeCollection new.
+	box1 := RTreeBox new size: 10; yourself.
+	box2 := RTreeBox new size: 10; position: 5 @ 5; yourself.
+	tree add: box1; add: box2.
+	self assert: (tree entriesAtRectangle: (0 @ 0 corner: 20 @ 20)) size equals: 2.
+	self assert: (tree entriesAtPoint: 7 @ 7) size equals: 2
+]
