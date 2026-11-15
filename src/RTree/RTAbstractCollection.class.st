@@ -170,3 +170,103 @@ RTAbstractCollection >> minimum: aNumber with: anotherNumber [
 	anotherNumber isNaN ifTrue: [ ^ anotherNumber ].
 	^ aNumber min: anotherNumber
 ]
+
+{ #category : 'private - finding' }
+RTAbstractCollection >> sortByEntryIndex: aCollection [
+	"The drawing order. A container numbers its entries 1..n, so a large result is placed in an
+	Array indexed by entryIndex, O(n), instead of being sorted with a block, O(n log n).
+	Small results, sparse or repeated indexes and entries without entryIndex are sorted"
+	| min max buckets result |
+	aCollection size < 256 ifTrue: [ ^ self sortWithBlock: aCollection ].
+	min := SmallInteger maxVal.
+	max := SmallInteger minVal.
+	aCollection do: [ :each | | index |
+		index := each entryIndex.
+		index isInteger ifFalse: [ ^ self sortWithBlock: aCollection ].
+		index < min ifTrue: [ min := index ].
+		index > max ifTrue: [ max := index ] ].
+	max - min >= (aCollection size * 4) ifTrue: [ ^ self sortWithBlock: aCollection ].
+	buckets := Array new: max - min + 1.
+	aCollection do: [ :each | | slot |
+		slot := each entryIndex - min + 1.
+		(buckets at: slot) ifNotNil: [ ^ self sortWithBlock: aCollection ].
+		buckets at: slot put: each ].
+	result := OrderedCollection new: aCollection size.
+	buckets do: [ :each | each ifNotNil: [ result add: each ] ].
+	^ result
+]
+
+{ #category : 'private - finding' }
+RTAbstractCollection >> sortWithBlock: aCollection [
+	"entryIndex is nil for an entry that no container numbered"
+	^ aCollection sort: [ :a :b | (a entryIndex ifNil: [ 0 ]) <= (b entryIndex ifNil: [ 0 ]) ]
+]
+
+{ #category : 'finding/searching' }
+RTAbstractCollection >> entriesInside: aRectangle [
+	"the entries whose rectangle is inside aRectangle (Rectangle>>containsRect:, borders included),
+	in drawing order"
+	| result |
+	result := OrderedCollection new.
+	self do: [ :each |
+		(aRectangle containsRect: each encompassingRectangle) ifTrue: [ result add: each ] ].
+	^ self sortByEntryIndex: result
+]
+
+{ #category : 'finding/searching' }
+RTAbstractCollection >> entriesNear: aPoint within: aDistance [
+	"The entries whose rectangle is at most aDistance from aPoint, the nearest first. The distance
+	of a rectangle is 0 for the points inside it or on its border. At the same distance, the entry
+	drawn on top comes first. aDistance can be Float infinity"
+	| limit candidates |
+	aDistance < 0 ifTrue: [ ^ OrderedCollection new ].
+	limit := aDistance * aDistance.
+	candidates := OrderedCollection new.
+	self do: [ :each | | distance |
+		distance := self squaredDistanceFrom: aPoint to: each encompassingRectangle.
+		distance <= limit ifTrue: [ candidates add: distance -> each ] ].
+	candidates sort: [ :a :b |
+		a key < b key or: [
+			a key = b key and: [ (a value entryIndex ifNil: [ 0 ]) >= (b value entryIndex ifNil: [ 0 ]) ] ] ].
+	^ candidates collect: [ :each | each value ]
+]
+
+{ #category : 'finding/searching' }
+RTAbstractCollection >> nearestEntryTo: aPoint [
+	^ self nearestEntryTo: aPoint ifNone: [ self errorEmptyCollection ]
+]
+
+{ #category : 'finding/searching' }
+RTAbstractCollection >> nearestEntryTo: aPoint ifNone: aBlock [
+	"the first of entriesNear: aPoint within: Float infinity, in one pass"
+	| best bestDistance bestIndex |
+	self do: [ :each | | distance index |
+		distance := self squaredDistanceFrom: aPoint to: each encompassingRectangle.
+		index := each entryIndex ifNil: [ 0 ].
+		(distance isNaN not and: [ best isNil or: [
+			distance < bestDistance or: [ distance = bestDistance and: [ index > bestIndex ] ] ] ])
+				ifTrue: [
+					best := each.
+					bestDistance := distance.
+					bestIndex := index ] ].
+	^ best ifNil: [ aBlock value ]
+]
+
+{ #category : 'private' }
+RTAbstractCollection >> squaredDistanceFrom: aPoint to: aRectangle [
+	"0 inside aRectangle or on its border. NaN when aRectangle has a NaN coordinate"
+	| x y origin corner dx dy |
+	x := aPoint x.
+	y := aPoint y.
+	origin := aRectangle origin.
+	corner := aRectangle corner.
+	dx := x < origin x
+		ifTrue: [ origin x - x ]
+		ifFalse: [ x > corner x ifTrue: [ x - corner x ] ifFalse: [ 0 ] ].
+	dy := y < origin y
+		ifTrue: [ origin y - y ]
+		ifFalse: [ y > corner y ifTrue: [ y - corner y ] ifFalse: [ 0 ] ].
+	(origin x isNaN or: [ origin y isNaN or: [ corner x isNaN or: [ corner y isNaN ] ] ])
+		ifTrue: [ ^ Float nan ].
+	^ dx * dx + (dy * dy)
+]

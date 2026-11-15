@@ -371,3 +371,91 @@ RTCollectionTest >> testBoundsOfEntriesThatAreNotFinite [
 	entryCollection remove: nan; remove: infinite.
 	self assert: entryCollection bounds equals: box encompassingRectangle
 ]
+
+{ #category : 'helpers' }
+RTCollectionTest >> integerBoxes: count seed: seed [
+	"boxes on integer coordinates, so that borders and distances coincide often; some have no
+	width or no height. The entryIndex is the order of the list"
+	| random |
+	random := Random seed: seed.
+	^ (1 to: count) collect: [ :i |
+		RTreeBox new
+			model: i;
+			entryIndex: i;
+			position: (random next * 400) rounded @ (random next * 400) rounded;
+			extent: (i \\ 10 = 0 ifTrue: [ 0 ] ifFalse: [ (random next * 40) rounded ])
+				@ (i \\ 15 = 0 ifTrue: [ 0 ] ifFalse: [ (random next * 40) rounded ]);
+			yourself ]
+]
+
+{ #category : 'tests' }
+RTCollectionTest >> testEntriesInside [
+	| boxes random queries |
+	boxes := self integerBoxes: 300 seed: 51.
+	entryCollection addAll: boxes.
+	random := Random seed: 52.
+	queries := (1 to: 100) collect: [ :i |
+		((random next * 400) rounded @ (random next * 400) rounded)
+			extent: (random next * 200) rounded @ (random next * 200) rounded ].
+	queries := queries , ((boxes first: 30) collect: [ :each | each encompassingRectangle ]).
+	queries := queries , { -1000 @ -1000 corner: 1000 @ 1000. 0 @ 0 corner: 0 @ 0 }.
+	queries do: [ :query |
+		self
+			assert: (entryCollection entriesInside: query) asArray
+			equals: (boxes select: [ :each | query containsRect: each encompassingRectangle ]) asArray ].
+	boxes do: [ :each | entryCollection remove: each ].
+	self assert: (entryCollection entriesInside: queries last) isEmpty
+]
+
+{ #category : 'tests' }
+RTCollectionTest >> testEntriesInsideWithEntriesThatAreNotFinite [
+	| box infinite nan everything |
+	box := RTreeBox new size: 10; entryIndex: 1; yourself.
+	infinite := RTreeBox new position: 5 @ 5; extent: Float infinity @ 1; entryIndex: 2; yourself.
+	nan := RTreeBox new position: Float nan @ 5; extent: 1 @ 1; entryIndex: 3; yourself.
+	entryCollection add: box; add: infinite; add: nan.
+	self assert: (entryCollection entriesInside: (-1 @ -1 corner: 100 @ 100)) asArray equals: { box }.
+	everything := Float negativeInfinity @ Float negativeInfinity corner: Float infinity @ Float infinity.
+	self assert: (entryCollection entriesInside: everything) asArray equals: { box. infinite }
+]
+
+{ #category : 'tests' }
+RTCollectionTest >> testEntriesNear [
+	"against brute force: by distance, then the topmost first"
+	| boxes random points squaredDistance |
+	boxes := self integerBoxes: 300 seed: 53.
+	entryCollection addAll: boxes.
+	random := Random seed: 54.
+	points := (1 to: 60) collect: [ :i | (random next * 500 - 50) rounded @ (random next * 500 - 50) rounded ].
+	points := points , ((boxes first: 10) collect: [ :each | each encompassingRectangle corner ]).
+	squaredDistance := [ :point :rectangle | | dx dy |
+		dx := (rectangle origin x - point x max: 0) max: point x - rectangle corner x.
+		dy := (rectangle origin y - point y max: 0) max: point y - rectangle corner y.
+		dx * dx + (dy * dy) ].
+	points do: [ :point | | all |
+		all := (boxes collect: [ :each | (squaredDistance value: point value: each encompassingRectangle) -> each ])
+			asSortedCollection: [ :a :b | a key < b key or: [ a key = b key and: [ a value entryIndex > b value entryIndex ] ] ].
+		#( 0 3 25 100 ) , { Float infinity } do: [ :distance |
+			self
+				assert: (entryCollection entriesNear: point within: distance) asArray
+				equals: ((all select: [ :each | each key <= (distance * distance) ]) collect: [ :each | each value ]) asArray ].
+		self assert: (entryCollection nearestEntryTo: point) identicalTo: all first value.
+		self assert: (entryCollection entriesNear: point within: -1) isEmpty ]
+]
+
+{ #category : 'tests' }
+RTCollectionTest >> testNearestEntryOfEmptyCollection [
+	| box |
+	self assert: (entryCollection nearestEntryTo: 0 @ 0 ifNone: [ #none ]) equals: #none.
+	self should: [ entryCollection nearestEntryTo: 0 @ 0 ] raise: Error.
+	self assert: (entryCollection entriesNear: 0 @ 0 within: Float infinity) isEmpty.
+	box := RTreeBox new position: 10 @ 10; size: 5; entryIndex: 1; yourself.
+	entryCollection add: box.
+	self assert: (entryCollection nearestEntryTo: 0 @ 0) identicalTo: box.
+	self assert: (entryCollection entriesNear: 0 @ 0 within: 14) isEmpty.
+	self assert: (entryCollection entriesNear: 0 @ 0 within: 15) asArray equals: { box }.
+	box position: Float nan @ 10; resetEncompassingRectangle.
+	entryCollection remove: box; add: box.
+	self assert: (entryCollection nearestEntryTo: 0 @ 0 ifNone: [ #none ]) equals: #none
+]
+

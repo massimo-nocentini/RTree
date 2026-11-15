@@ -37,6 +37,10 @@ RTAbstractNode >> indexLeavesIn: aDictionary [
 ]
 
 { #category : 'finding/searching' }
+RTAbstractNode >> entriesInside: aRectangle list: aCollection [
+]
+
+{ #category : 'finding/searching' }
 RTAbstractNode >> entriesWithPoint: aPoint do: aBlock [
 ]
 

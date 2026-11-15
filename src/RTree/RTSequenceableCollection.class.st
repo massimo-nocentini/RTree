@@ -48,6 +48,38 @@ RTSequenceableCollection >> entriesAtRectangle: aRectangle [
 ]
 
 { #category : 'finding/searching' }
+RTSequenceableCollection >> entriesInside: aRectangle [
+	^ entries select: [ :each | aRectangle containsRect: each encompassingRectangle ]
+]
+
+{ #category : 'finding/searching' }
+RTSequenceableCollection >> entriesNear: aPoint within: aDistance [
+	"see RTAbstractCollection>>entriesNear:within:. The last entries are drawn on top"
+	| limit candidates |
+	aDistance < 0 ifTrue: [ ^ OrderedCollection new ].
+	limit := aDistance * aDistance.
+	candidates := OrderedCollection new.
+	entries reverseDo: [ :each | | distance |
+		distance := self squaredDistanceFrom: aPoint to: each encompassingRectangle.
+		distance <= limit ifTrue: [ candidates add: distance -> each ] ].
+	"stable: at the same distance the reverse order of the list is kept"
+	candidates sort: [ :a :b | a key <= b key ].
+	^ candidates collect: [ :each | each value ]
+]
+
+{ #category : 'finding/searching' }
+RTSequenceableCollection >> nearestEntryTo: aPoint ifNone: aBlock [
+	"the first of entriesNear: aPoint within: Float infinity, in one pass"
+	| best bestDistance |
+	entries reverseDo: [ :each | | distance |
+		distance := self squaredDistanceFrom: aPoint to: each encompassingRectangle.
+		(distance isNaN not and: [ best isNil or: [ distance < bestDistance ] ]) ifTrue: [
+			best := each.
+			bestDistance := distance ] ].
+	^ best ifNil: [ aBlock value ]
+]
+
+{ #category : 'finding/searching' }
 RTSequenceableCollection >> entryAtPoint: aPoint satisfying: aBlock ifNone: noneBlock [
 	"the last entries are drawn on top, as in entriesAtPoint:"
 	entries reverseDo: [ :entry |

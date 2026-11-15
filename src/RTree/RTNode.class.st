@@ -167,6 +167,27 @@ RTNode >> entriesWithPoint: aPoint do: aBlock [
 	right entriesWithPoint: aPoint do: aBlock
 ]
 
+{ #category : 'finding/searching' }
+RTNode >> entriesInside: aRectangle list: aCollection [
+	"adds the entries whose rectangle is inside aRectangle, borders included"
+	| origin corner queryOrigin queryCorner |
+	origin := rectangle origin.
+	corner := rectangle corner.
+	queryOrigin := aRectangle origin.
+	queryCorner := aRectangle corner.
+	"no entry below is inside when the closed rectangles do not meet"
+	(origin x <= queryCorner x and: [ queryOrigin x <= corner x and: [
+		origin y <= queryCorner y and: [ queryOrigin y <= corner y ] ] ])
+			ifFalse: [ ^ self ].
+	"every entry below is inside, a leaf included"
+	(queryOrigin x <= origin x and: [ queryOrigin y <= origin y and: [
+		corner x <= queryCorner x and: [ corner y <= queryCorner y ] ] ])
+			ifTrue: [ ^ self do: [ :each | aCollection add: each ] ].
+	left ifNil: [ ^ self ].
+	left entriesInside: aRectangle list: aCollection.
+	right entriesInside: aRectangle list: aCollection
+]
+
 { #category : 'private' }
 RTNode >> ensureBalancePath: aCollection [
 	| recomputeHeight |

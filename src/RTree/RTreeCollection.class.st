@@ -165,6 +165,26 @@ RTreeCollection >> entriesAtPoint: aPoint [
 ]
 
 { #category : 'finding/searching' }
+RTreeCollection >> entriesInside: aRectangle [
+	| result |
+	result := OrderedCollection new.
+	root entriesInside: aRectangle list: result.
+	outliers ifNotNil: [
+		outliers do: [ :each |
+			(aRectangle containsRect: each encompassingRectangle) ifTrue: [ result add: each ] ] ].
+	^ self sortByEntryIndex: result
+]
+
+{ #category : 'finding/searching' }
+RTreeCollection >> entriesNear: aPoint within: aDistance [
+	"see RTAbstractCollection>>entriesNear:within:"
+	| result |
+	result := OrderedCollection new.
+	self nearestEntriesTo: aPoint within: aDistance do: [ :each | result add: each ].
+	^ result
+]
+
+{ #category : 'finding/searching' }
 RTreeCollection >> entryAtPoint: aPoint satisfying: aBlock ifNone: noneBlock [
 	"Only the entries whose rectangle holds aPoint are collected, without asking for their hits.
 	They are then tried from the topmost, see firstOf:atPoint:satisfying:ifNone:"
@@ -231,6 +251,57 @@ RTreeCollection >> isFiniteRectangle: aRectangle [
 { #category : 'testing' }
 RTreeCollection >> isTotalBalanced [
 	^ root isTotalBalanced
+]
+
+{ #category : 'private - finding' }
+RTreeCollection >> nearItem: anArray before: anotherArray [
+	"the order of the heap of nearestEntriesTo:within:do:, items are { squared distance. node. entry }"
+	| distance otherDistance |
+	distance := anArray first.
+	otherDistance := anotherArray first.
+	distance < otherDistance ifTrue: [ ^ true ].
+	otherDistance < distance ifTrue: [ ^ false ].
+	(anArray at: 2) ifNotNil: [ ^ true ].
+	(anotherArray at: 2) ifNotNil: [ ^ false ].
+	^ ((anArray at: 3) entryIndex ifNil: [ 0 ]) >= ((anotherArray at: 3) entryIndex ifNil: [ 0 ])
+]
+
+{ #category : 'finding/searching' }
+RTreeCollection >> nearestEntriesTo: aPoint within: aDistance do: aBlock [
+	"Best first: a heap holds the nodes and the entries met so far, by their squared distance to
+	aPoint, and the nearest is expanded first. The nodes farther than aDistance are pruned.
+	At the same distance a node comes before the entries: when the first entry at a distance is
+	taken, every entry at that distance is in the heap already, and they come by decreasing
+	entryIndex"
+	| limit heap push |
+	aDistance < 0 ifTrue: [ ^ self ].
+	limit := aDistance * aDistance.
+	heap := Heap sortBlock: [ :a :b | self nearItem: a before: b ].
+	push := [ :node | | distance |
+		distance := self squaredDistanceFrom: aPoint to: node rectangle.
+		distance <= limit ifTrue: [
+			node isLeaf
+				ifTrue: [ heap add: (Array with: distance with: nil with: node contents) ]
+				ifFalse: [ heap add: (Array with: distance with: node with: nil) ] ] ].
+	root isEmpty ifFalse: [ push value: root ].
+	outliers ifNotNil: [
+		outliers do: [ :each | | distance |
+			distance := self squaredDistanceFrom: aPoint to: each encompassingRectangle.
+			distance <= limit ifTrue: [ heap add: (Array with: distance with: nil with: each) ] ] ].
+	[ heap isEmpty ] whileFalse: [ | item node |
+		item := heap removeFirst.
+		node := item at: 2.
+		node
+			ifNil: [ aBlock value: (item at: 3) ]
+			ifNotNil: [
+				push value: node left.
+				push value: node right ] ]
+]
+
+{ #category : 'finding/searching' }
+RTreeCollection >> nearestEntryTo: aPoint ifNone: aBlock [
+	self nearestEntriesTo: aPoint within: Float infinity do: [ :each | ^ each ].
+	^ aBlock value
 ]
 
 { #category : 'accessing' }
@@ -395,37 +466,6 @@ RTreeCollection >> shouldSwap: anAssociation and: anAssociation2 [
 { #category : 'public' }
 RTreeCollection >> sortResultList: aCollection [
 	aCollection sort: [ :a :b | self shouldSwap: a and: b ]
-]
-
-{ #category : 'private - finding' }
-RTreeCollection >> sortByEntryIndex: aCollection [
-	"The drawing order. A container numbers its entries 1..n, so a large result is placed in an
-	Array indexed by entryIndex, O(n), instead of being sorted with a block, O(n log n).
-	Small results, sparse or repeated indexes and entries without entryIndex are sorted"
-	| min max buckets result |
-	aCollection size < 256 ifTrue: [ ^ self sortWithBlock: aCollection ].
-	min := SmallInteger maxVal.
-	max := SmallInteger minVal.
-	aCollection do: [ :each | | index |
-		index := each entryIndex.
-		index isInteger ifFalse: [ ^ self sortWithBlock: aCollection ].
-		index < min ifTrue: [ min := index ].
-		index > max ifTrue: [ max := index ] ].
-	max - min >= (aCollection size * 4) ifTrue: [ ^ self sortWithBlock: aCollection ].
-	buckets := Array new: max - min + 1.
-	aCollection do: [ :each | | slot |
-		slot := each entryIndex - min + 1.
-		(buckets at: slot) ifNotNil: [ ^ self sortWithBlock: aCollection ].
-		buckets at: slot put: each ].
-	result := OrderedCollection new: aCollection size.
-	buckets do: [ :each | each ifNotNil: [ result add: each ] ].
-	^ result
-]
-
-{ #category : 'private - finding' }
-RTreeCollection >> sortWithBlock: aCollection [
-	"entryIndex is nil for an entry that no container numbered"
-	^ aCollection sort: [ :a :b | (a entryIndex ifNil: [ 0 ]) <= (b entryIndex ifNil: [ 0 ]) ]
 ]
 
 { #category : 'update' }
