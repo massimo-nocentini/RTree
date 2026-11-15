@@ -67,6 +67,16 @@ RTEntry >> parent [
 	^ self explicitRequirement
 ]
 
+{ #category : 'accessing' }
+RTEntry >> spatialSegment [
+	"nil, or { start. end. halfWidth }: the straight segment from the point start to the point end,
+	such that every point this entry accepts in addEntriesIn:position: is at most halfWidth from it.
+	RTGridCollection in segment aware mode registers such an entry only in the cells that this
+	thick segment crosses, instead of every cell of its rectangle: a long diagonal line no longer
+	fills its whole rectangle. A straight line overrides it"
+	^ nil
+]
+
 { #category : 'rectangle' }
 RTEntry >> resetEncompassingRectangle [
 	^ self explicitRequirement

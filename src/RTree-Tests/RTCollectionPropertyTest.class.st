@@ -80,6 +80,22 @@ RTCollectionPropertyTest >> assertRTNaryTreeCollectionAfter: anOperation [
 ]
 
 { #category : 'checking' }
+RTCollectionPropertyTest >> assertRTGridCollectionAfter: anOperation [
+	"every record has the rectangle of its entry and is in the cells of its keys, or oversize"
+	| count |
+	count := 0.
+	collection do: [ :entry |
+		(collection itemFor: entry) ifNotNil: [ :item |
+			count := count + 1.
+			self assert: item asRectangle equals: entry encompassingRectangle after: anOperation.
+			item keys
+				ifNil: [ self assert: collection oversizeCount > 0 ]
+				ifNotNil: [ :keys |
+					keys do: [ :key | self assert: ((collection bucketAt: key) identityIncludes: item) ] ] ] ].
+	self assert: count equals: collection size - collection outliers size
+]
+
+{ #category : 'checking' }
 RTCollectionPropertyTest >> assertQuery: anOperation [
 	| kind |
 	kind := anOperation first.
