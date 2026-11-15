@@ -287,13 +287,20 @@ RTreeCollection >> rectangle [
 
 { #category : 'removing' }
 RTreeCollection >> remove: oldRTEntry ifAbsent: anExceptionBlock [
-	| path index leaf |
+	| index leaf |
 	outliers ifNotNil: [
 		index := outliers identityIndexOf: oldRTEntry.
 		index > 0 ifTrue: [ ^ outliers removeAt: index ] ].
 	leaf := self leaves removeKey: oldRTEntry ifAbsent: [ ^ anExceptionBlock value ].
 	"walk up from the leaf: neither a search nor the rectangle of the entry is needed"
-	path := self pathTo: leaf.
+	^ self removeEntry: oldRTEntry path: (self pathTo: leaf) ifAbsent: anExceptionBlock
+]
+
+{ #category : 'private - removing' }
+RTreeCollection >> removeEntry: oldRTEntry path: aPath ifAbsent: anExceptionBlock [
+	"remove the leaf at the end of aPath (see pathTo:), already taken out of the leaves"
+	| path |
+	path := aPath.
 	path ifEmpty: [
 		"the parents were not maintained by whoever built the nodes, search the entry"
 		path := root searchPath: oldRTEntry.
@@ -415,7 +422,9 @@ RTreeCollection >> updateEntry: anRTEntry [
 	path := self pathTo: leaf.
 	((self isFiniteRectangle: rectangle) and: [ self canUpdateIn: path rectangle: rectangle ])
 		ifFalse: [
-			self remove: anRTEntry.
+			"the path is known already: remove the leaf without walking up again"
+			self leaves removeKey: anRTEntry.
+			self removeEntry: anRTEntry path: path ifAbsent: [ self errorNotFound: anRTEntry ].
 			^ self add: anRTEntry ].
 	leaf rectangle: rectangle.
 	(path size - 1 to: 1 by: -1) do: [ :index | | node old |
