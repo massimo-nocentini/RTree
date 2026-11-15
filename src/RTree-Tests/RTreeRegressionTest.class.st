@@ -555,3 +555,25 @@ RTreeRegressionTest >> testPendingUpdateOfAnEntryThatBecomesNaN [
 	self assert: tree size equals: 99
 ]
 
+{ #category : 'tests - finding' }
+RTreeRegressionTest >> testLargeSparseResultsAreOrdered [
+	"the large results with sparse or repeated indexes are sorted by a radix sort: every entry
+	is there once, in entryIndex order"
+	| tree boxes result expected |
+	tree := RTreeCollection new.
+	boxes := (self randomBoxes: 3000 seed: 30) doWithIndex: [ :each :i |
+		each entryIndex: (i \\ 5 = 0
+			ifTrue: [ 77777 ]
+			ifFalse: [ i * 7919 \\ 1000003 ]) ].
+	tree addAll: boxes.
+	#( 300 600 1000 ) do: [ :side | | window |
+		window := 0 @ 0 extent: side @ side.
+		result := tree entriesAtRectangle: window.
+		expected := (boxes select: [ :each | each encompassingRectangle intersects: window ]) asSet.
+		self assert: result asSet equals: expected.
+		self assert: result size equals: expected size.
+		self
+			assert: result asArray
+			equals: (result asArray sort: [ :a :b | a entryIndex <= b entryIndex ]) ]
+]
+

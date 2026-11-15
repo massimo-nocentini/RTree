@@ -182,10 +182,40 @@ RTAbstractCollection >> minimum: aNumber with: anotherNumber [
 ]
 
 { #category : 'private - finding' }
+RTAbstractCollection >> radixSortByEntryIndex: aCollection max: maxIndex [
+	"A stable least significant digit radix sort on the entryIndex, 11 bits per pass (two passes
+	up to 4 million), O(n + 2048) per pass. The indexes are SmallIntegers from 0 to maxIndex"
+	| source target counts shift |
+	source := aCollection asArray.
+	target := Array new: source size.
+	counts := Array new: 2049.
+	shift := 0.
+	[ shift = 0 or: [ (maxIndex bitShift: shift negated) > 0 ] ] whileTrue: [ | swap |
+		counts atAllPut: 0.
+		source do: [ :each | | digit |
+			digit := ((each entryIndex bitShift: shift negated) bitAnd: 2047) + 2.
+			counts at: digit put: (counts at: digit) + 1 ].
+		"counts at: digit + 1 is now the number of entries of a smaller digit"
+		counts at: 1 put: 0.
+		2 to: 2049 do: [ :i | counts at: i put: (counts at: i) + (counts at: i - 1) ].
+		source do: [ :each | | digit position |
+			digit := ((each entryIndex bitShift: shift negated) bitAnd: 2047) + 1.
+			position := (counts at: digit) + 1.
+			counts at: digit put: position.
+			target at: position put: each ].
+		swap := source.
+		source := target.
+		target := swap.
+		shift := shift + 11 ].
+	^ OrderedCollection withAll: source
+]
+
+{ #category : 'private - finding' }
 RTAbstractCollection >> sortByEntryIndex: aCollection [
-	"The drawing order. A container numbers its entries 1..n, so a large result is placed in an
-	Array indexed by entryIndex, O(n), instead of being sorted with a block, O(n log n).
-	Small results, sparse or repeated indexes and entries without entryIndex are sorted"
+	"The drawing order. A container numbers its entries 1..n, so a large result whose indexes are
+	dense is placed in an Array indexed by entryIndex, O(n), and a large result of sparse or
+	repeated indexes is sorted by a radix sort, O(n). Small results and entries without an
+	integer entryIndex are sorted with a block. Each way keeps the order of equal indexes"
 	| min max buckets result |
 	aCollection size < 256 ifTrue: [ ^ self sortWithBlock: aCollection ].
 	min := SmallInteger maxVal.
@@ -195,15 +225,24 @@ RTAbstractCollection >> sortByEntryIndex: aCollection [
 		index isInteger ifFalse: [ ^ self sortWithBlock: aCollection ].
 		index < min ifTrue: [ min := index ].
 		index > max ifTrue: [ max := index ] ].
-	max - min >= (aCollection size * 4) ifTrue: [ ^ self sortWithBlock: aCollection ].
+	max - min >= (aCollection size * 4) ifTrue: [
+		^ self sortSparseByEntryIndex: aCollection min: min max: max ].
 	buckets := Array new: max - min + 1.
 	aCollection do: [ :each | | slot |
 		slot := each entryIndex - min + 1.
-		(buckets at: slot) ifNotNil: [ ^ self sortWithBlock: aCollection ].
+		(buckets at: slot) ifNotNil: [ ^ self sortSparseByEntryIndex: aCollection min: min max: max ].
 		buckets at: slot put: each ].
 	result := OrderedCollection new: aCollection size.
 	buckets do: [ :each | each ifNotNil: [ result add: each ] ].
 	^ result
+]
+
+{ #category : 'private - finding' }
+RTAbstractCollection >> sortSparseByEntryIndex: aCollection min: min max: max [
+	"the radix sort from 512 entries, when the indexes are small enough integers"
+	(aCollection size >= 512 and: [ min >= 0 and: [ max class == SmallInteger ] ])
+		ifTrue: [ ^ self radixSortByEntryIndex: aCollection max: max ].
+	^ self sortWithBlock: aCollection
 ]
 
 { #category : 'private - finding' }
