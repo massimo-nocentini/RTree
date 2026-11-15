@@ -462,3 +462,32 @@ RTCollectionTest >> testNearestEntryOfEmptyCollection [
 	self assert: (entryCollection nearestEntryTo: 0 @ 0 ifNone: [ #none ]) equals: #none
 ]
 
+{ #category : 'tests' }
+RTCollectionTest >> testEntryAtPointSatisfyingAmongManyCandidates [
+	"the rectangles of hundreds of entries hold each point, as for long lines, and the indexes
+	need two digits of the radix sort: the topmost query still answers the first of
+	entriesAtPoint: that satisfies the block, ties included"
+	| random points blocks |
+	random := Random seed: 61.
+	1 to: 400 do: [ :i | | origin |
+		origin := (random next * 300) @ (random next * 300).
+		entryCollection add: (RTreeBox new
+			model: i;
+			entryIndex: (i \\ 9 = 0 ifTrue: [ nil ] ifFalse: [ i // 3 * 97 ]);
+			position: origin;
+			extent: (random next * 700 + 50) @ (random next * 700 + 50);
+			yourself) ].
+	points := (1 to: 200) collect: [ :i | (random next * 900) @ (random next * 900) ].
+	blocks := {
+		[ :each | each model \\ 7 = 0 ].
+		[ :each | each model \\ 50 = 0 ].
+		[ :each | each entryIndex isNil ].
+		[ :each | false ] }.
+	points do: [ :point | | hits |
+		hits := entryCollection entriesAtPoint: point.
+		blocks do: [ :block |
+			self
+				assert: (entryCollection entryAtPoint: point satisfying: block ifNone: [ nil ])
+				identicalTo: (hits detect: block ifNone: [ nil ]) ] ]
+]
+

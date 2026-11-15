@@ -102,39 +102,6 @@ RTAbstractCollection >> entryAtPoint: aPoint satisfying: aBlock ifNone: noneBloc
 	^ (self entriesAtPoint: aPoint) detect: aBlock ifNone: noneBlock
 ]
 
-{ #category : 'private - finding' }
-RTAbstractCollection >> firstOf: candidates atPoint: aPoint satisfying: aBlock ifNone: noneBlock [
-	"candidates is a sequence of the entries whose rectangle may hold aPoint. entriesAtPoint: lets
-	each of them add its hits, and orders them by decreasing entryIndex (nil counts as 0), keeping
-	the order of the candidates that share an index. The same order is followed here: the topmost
-	candidate is usually the answer. When it is not (long lines have many candidates and few
-	hits), one pass over the others keeps the first hit that satisfies aBlock of the candidate of
-	the largest index, without sorting them"
-	| top topIndex hits found foundIndex |
-	candidates isEmpty ifTrue: [ ^ noneBlock value ].
-	top := 1.
-	topIndex := (candidates at: 1) entryIndex ifNil: [ 0 ].
-	2 to: candidates size do: [ :i | | index |
-		index := (candidates at: i) entryIndex ifNil: [ 0 ].
-		index > topIndex ifTrue: [
-			top := i.
-			topIndex := index ] ].
-	((candidates at: top) firstEntryAtPoint: aPoint satisfying: aBlock ifNone: [ nil ])
-		ifNotNil: [ :entry | ^ entry ].
-	hits := OrderedCollection new.
-	candidates doWithIndex: [ :each :i | | index |
-		index := each entryIndex ifNil: [ 0 ].
-		(i ~= top and: [ found isNil or: [ index > foundIndex ] ]) ifTrue: [ | k |
-			k := hits size.
-			each addEntriesIn: hits position: aPoint.
-			[ (k := k + 1) <= hits size ] whileTrue: [
-				(aBlock value: (hits at: k)) ifTrue: [
-					found := hits at: k.
-					foundIndex := index.
-					k := hits size ] ] ] ].
-	^ found ifNil: [ noneBlock value ]
-]
-
 { #category : 'shapes - ordering' }
 RTAbstractCollection >> pushBack: anRTEntry [
 	self subclassResponsibility
@@ -208,6 +175,90 @@ RTAbstractCollection >> radixSortByEntryIndex: aCollection max: maxIndex [
 		target := swap.
 		shift := shift + 11 ].
 	^ OrderedCollection withAll: source
+]
+
+{ #category : 'private - finding' }
+RTAbstractCollection >> firstOf: candidates atPoint: aPoint satisfying: aBlock ifNone: noneBlock [
+	"candidates is a sequence of the entries whose rectangle may hold aPoint. entriesAtPoint: lets
+	each of them add its hits, and orders them by decreasing entryIndex (nil counts as 0), keeping
+	the order of the candidates that share an index: the answer is the first hit that satisfies
+	aBlock in that order.
+	The topmost candidate, usually the answer, is found by one pass and asked with
+	firstEntryAtPoint:satisfying:ifNone: (a composite can answer it lazily). Otherwise the others
+	are tried by bands of entryIndex from the top, each band twice as wide as the previous one,
+	without sorting them: one pass over a band keeps the satisfying hit of the largest index (the
+	first candidate among equal ones), and the first band that has one holds the answer. Long
+	lines have hundreds of candidates and few hits: only the bands down to the first hit are
+	tried.
+	A candidate whose class overrides firstEntryAtPoint:satisfying:ifNone: is asked with it (a
+	shape can test aBlock before its geometry). The default of RTEntry would allocate a collection
+	for every candidate: the others add their hits to one collection, see
+	firstHitOf:atPoint:satisfying:in:"
+	| count keys top topIndex minIndex hits remaining size high width lastClass askHook |
+	count := candidates size.
+	count = 0 ifTrue: [ ^ noneBlock value ].
+	keys := Array new: count.
+	top := 1.
+	topIndex := minIndex := (candidates at: 1) entryIndex ifNil: [ 0 ].
+	keys at: 1 put: topIndex.
+	2 to: count do: [ :i | | index |
+		index := (candidates at: i) entryIndex ifNil: [ 0 ].
+		keys at: i put: index.
+		index > topIndex ifTrue: [
+			top := i.
+			topIndex := index ].
+		index < minIndex ifTrue: [ minIndex := index ] ].
+	((candidates at: top) firstEntryAtPoint: aPoint satisfying: aBlock ifNone: [ nil ])
+		ifNotNil: [ :entry | ^ entry ].
+	count = 1 ifTrue: [ ^ noneBlock value ].
+	hits := OrderedCollection new.
+	"the positions of the candidates not tried yet, in their order"
+	remaining := Array new: count - 1.
+	size := 0.
+	1 to: count do: [ :i | i = top ifFalse: [ remaining at: (size := size + 1) put: i ] ].
+	high := topIndex.
+	width := (topIndex - minIndex) // 16 max: 1.
+	[ size > 0 ] whileTrue: [ | low found foundIndex kept |
+		"the band low < index <= high; the candidates below it are kept for the next bands"
+		low := high - width.
+		kept := 0.
+		1 to: size do: [ :k | | i index |
+			i := remaining at: k.
+			index := keys at: i.
+			index > low
+				ifTrue: [
+					(found isNil or: [ index > foundIndex ]) ifTrue: [ | candidate |
+						candidate := candidates at: i.
+						"the class of the candidate overrides the hook, or not (see below)"
+						candidate class == lastClass ifFalse: [
+							lastClass := candidate class.
+							askHook := (lastClass lookupSelector: #firstEntryAtPoint:satisfying:ifNone:)
+								ifNil: [ false ]
+								ifNotNil: [ :method | method origin ~~ RTEntry ] ].
+						(askHook
+							ifTrue: [ candidate firstEntryAtPoint: aPoint satisfying: aBlock ifNone: [ nil ] ]
+							ifFalse: [ self firstHitOf: candidate atPoint: aPoint satisfying: aBlock in: hits ])
+								ifNotNil: [ :entry |
+									found := entry.
+									foundIndex := index ] ] ]
+				ifFalse: [ remaining at: (kept := kept + 1) put: i ] ].
+		found ifNotNil: [ ^ found ].
+		size := kept.
+		high := low.
+		width := width * 2 ].
+	^ noneBlock value
+]
+
+{ #category : 'private - finding' }
+RTAbstractCollection >> firstHitOf: anRTEntry atPoint: aPoint satisfying: aBlock in: hits [
+	"the first of the hits that anRTEntry adds to hits (shared by the candidates of one query, so
+	that a candidate without hits allocates nothing) that satisfies aBlock, or nil"
+	| index |
+	index := hits size.
+	anRTEntry addEntriesIn: hits position: aPoint.
+	[ (index := index + 1) <= hits size ] whileTrue: [
+		(aBlock value: (hits at: index)) ifTrue: [ ^ hits at: index ] ].
+	^ nil
 ]
 
 { #category : 'private - finding' }
