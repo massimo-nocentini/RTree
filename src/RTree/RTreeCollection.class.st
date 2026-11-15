@@ -171,27 +171,12 @@ RTreeCollection >> do: aBlock [
 
 { #category : 'finding/searching' }
 RTreeCollection >> entriesAtPoint: aPoint [
-	"very important to preserv the drawing order: the topmost entry comes first.
-	Every entry whose rectangle holds aPoint adds its own hits (a composite adds its children
-	first). Only the entries that added something are then ordered, by entryIndex: this is the
-	order of the indexesFromRoot of the hits (see sortResultList:), without computing them"
-	| res groups addHits |
+	"very important to preserv the drawing order: the topmost entry comes first,
+	see hitsAtPoint:candidates:"
 	self applyPendingUpdates.
-	res := OrderedCollection new.
-	groups := OrderedCollection new.
-	addHits := [ :each | | start |
-		start := res size.
-		each addEntriesIn: res position: aPoint.
-		res size > start ifTrue: [ groups add: each -> (start + 1 to: res size) ] ].
-	root entriesWithPoint: aPoint do: addHits.
-	outliers ifNotNil: [ outliers do: addHits ].
-	groups size < 2 ifTrue: [ ^ res ].
-	groups sort: [ :a :b | (a key entryIndex ifNil: [ 0 ]) >= (b key entryIndex ifNil: [ 0 ]) ].
-	^ groups
-		inject: (OrderedCollection new: res size)
-		into: [ :sorted :group |
-			group value do: [ :index | sorted add: (res at: index) ].
-			sorted ]
+	^ self hitsAtPoint: aPoint candidates: [ :addHits |
+		root entriesWithPoint: aPoint do: addHits.
+		outliers ifNotNil: [ outliers do: addHits ] ]
 ]
 
 { #category : 'finding/searching' }
@@ -268,19 +253,6 @@ RTreeCollection >> isBalanced [
 { #category : 'testing' }
 RTreeCollection >> isEmpty [
 	^ root isEmpty and: [ outliers isNil or: [ outliers isEmpty ] ]
-]
-
-{ #category : 'testing' }
-RTreeCollection >> isFiniteRectangle: aRectangle [
-	"NaN and infinities break Rectangle>>merge: and the comparisons of the tree.
-	x - x = 0 holds for every finite number and fails for NaN and infinities"
-	| origin corner |
-	origin := aRectangle origin.
-	corner := aRectangle corner.
-	^ origin x - origin x = 0 and: [
-		origin y - origin y = 0 and: [
-		corner x - corner x = 0 and: [
-		corner y - corner y = 0 ] ] ]
 ]
 
 { #category : 'testing' }

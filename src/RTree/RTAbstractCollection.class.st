@@ -275,3 +275,39 @@ RTAbstractCollection >> squaredDistanceFrom: aPoint to: aRectangle [
 		ifTrue: [ ^ Float nan ].
 	^ dx * dx + (dy * dy)
 ]
+
+{ #category : 'testing' }
+RTAbstractCollection >> isFiniteRectangle: aRectangle [
+	"NaN and infinities break Rectangle>>merge: and the comparisons of the tree.
+	x - x = 0 holds for every finite number and fails for NaN and infinities"
+	| origin corner |
+	origin := aRectangle origin.
+	corner := aRectangle corner.
+	^ origin x - origin x = 0 and: [
+		origin y - origin y = 0 and: [
+		corner x - corner x = 0 and: [
+		corner y - corner y = 0 ] ] ]
+]
+
+{ #category : 'private - finding' }
+RTAbstractCollection >> hitsAtPoint: aPoint candidates: aBlock [
+	"aBlock is evaluated with a block to evaluate with every entry whose rectangle may hold aPoint.
+	Each of them adds its own hits (a composite adds its children first). Only the entries that
+	added something are then ordered, by decreasing entryIndex (nil counts as 0), keeping the order
+	of the candidates that share an index: this is the order of the indexesFromRoot of the hits,
+	without computing them"
+	| res groups |
+	res := OrderedCollection new.
+	groups := OrderedCollection new.
+	aBlock value: [ :each | | start |
+		start := res size.
+		each addEntriesIn: res position: aPoint.
+		res size > start ifTrue: [ groups add: each -> (start + 1 to: res size) ] ].
+	groups size < 2 ifTrue: [ ^ res ].
+	groups sort: [ :a :b | (a key entryIndex ifNil: [ 0 ]) >= (b key entryIndex ifNil: [ 0 ]) ].
+	^ groups
+		inject: (OrderedCollection new: res size)
+		into: [ :sorted :group |
+			group value do: [ :index | sorted add: (res at: index) ].
+			sorted ]
+]

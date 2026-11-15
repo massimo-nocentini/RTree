@@ -35,10 +35,11 @@ RTCollectionPropertyTest >> assertConsistentAfter: anOperation [
 		assert: (contents collect: [ :each | each model ]) asArray sort
 		equals: (model collect: [ :each | each model ]) asArray sort
 		after: anOperation.
-	"walking the tree applies its pending updates: not after every operation, so that the
-	updates stay pending across adds, removes and moves"
-	((collection isKindOf: RTreeCollection) and: [ checks \\ 25 = 0 or: [ anOperation first = #copy ] ])
-		ifTrue: [ self assertTreeOf: collection after: anOperation ].
+	"the structure is checked by assert<class name>After:. Walking an RTreeCollection applies its
+	pending updates: not after every operation, so that they stay pending across the others"
+	(checks \\ 25 = 0 or: [ anOperation first = #copy ]) ifTrue: [ | selector |
+		selector := ('assert', collection class name, 'After:') asSymbol.
+		(self respondsTo: selector) ifTrue: [ self perform: selector with: anOperation ] ].
 	checks := checks + 1
 ]
 
@@ -46,6 +47,36 @@ RTCollectionPropertyTest >> assertConsistentAfter: anOperation [
 RTCollectionPropertyTest >> assert: actual equals: expected after: anOperation [
 	actual = expected ifTrue: [ ^ self ].
 	self fail: 'after ', anOperation printString, ': ', actual printString, ' instead of ', expected printString
+]
+
+{ #category : 'checking' }
+RTCollectionPropertyTest >> assertRTNaryTreeCollectionAfter: anOperation [
+	"the leaves are at the same depth, the boxes are tight, every node has a parent link, at most
+	maxEntries children and at least one, and the records are those of the leaves"
+	| depths itemCount walk |
+	depths := Set new.
+	itemCount := 0.
+	walk := nil.
+	walk := [ :node :depth |
+		self assert: node children size <= collection maxEntries.
+		(node == collection root or: [ node children notEmpty ]) ifFalse: [ self fail: 'empty node after ', anOperation printString ].
+		node children do: [ :each | self assert: each parent identicalTo: node ].
+		node children ifNotEmpty: [
+			self
+				assert: node asRectangle
+				equals: (Rectangle merging: (node children collect: [ :each | each asRectangle ]))
+				after: anOperation ].
+		node isLeaf
+			ifTrue: [
+				depths add: depth.
+				node children do: [ :each |
+					itemCount := itemCount + 1.
+					self assert: (collection itemFor: each entry) identicalTo: each.
+					self assert: each asRectangle equals: each entry encompassingRectangle after: anOperation ] ]
+			ifFalse: [ node children do: [ :each | walk value: each value: depth + 1 ] ] ].
+	walk value: collection root value: 1.
+	self assert: depths size <= 1 description: 'leaves at different depths'.
+	self assert: itemCount equals: collection size - collection outliers size
 ]
 
 { #category : 'checking' }
@@ -107,9 +138,10 @@ RTCollectionPropertyTest >> assertQueryNear: aPoint within: aDistance [
 ]
 
 { #category : 'checking' }
-RTCollectionPropertyTest >> assertTreeOf: aTreeCollection after: anOperation [
+RTCollectionPropertyTest >> assertRTreeCollectionAfter: anOperation [
 	"heights, AVL balance, tight rectangles, parents and the leaf index"
-	| leafCount walk |
+	| aTreeCollection leafCount walk |
+	aTreeCollection := collection.
 	aTreeCollection root isEmpty ifTrue: [ ^ self ].
 	leafCount := 0.
 	walk := nil.
