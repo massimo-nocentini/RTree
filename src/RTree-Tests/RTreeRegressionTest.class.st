@@ -460,3 +460,98 @@ RTreeRegressionTest >> testBulkLoad [
 	self assert: tree size equals: 602.
 	self assertTight: tree
 ]
+
+{ #category : 'tests - updating' }
+RTreeRegressionTest >> testLayoutBuildsTheTreeAgain [
+	"Every updateEntry: of a layout removed and added the entry. The far moves are now applied by the
+	next query, and when many entries moved the tree is built again: balanced and tight"
+	| tree list boxes |
+	tree := RTreeCollection new.
+	list := RTSequenceableCollection new.
+	"the shapes of a builder are added before the layout, all at the same place"
+	boxes := (1 to: 1000) collect: [ :i | self boxAt: 0 @ 0 extent: 10 @ 10 index: i ].
+	boxes do: [ :each | tree add: each. list add: each ].
+	boxes doWithIndex: [ :each :i |
+		each position: (i \\ 40 * 15) @ (i // 40 * 15).
+		tree updateEntry: each.
+		list updateEntry: each ].
+	self assert: (tree entriesAtPoint: 20 @ 20) asArray equals: (list entriesAtPoint: 20 @ 20) asArray.
+	"1000 entries: the leaves of a balanced tree are on the 11th level at most"
+	self assert: tree height equals: 11.
+	self assertTight: tree.
+	self assert: tree bounds equals: list bounds.
+	0 to: 600 by: 13 do: [ :x |
+		0 to: 400 by: 11 do: [ :y |
+			self assert: (tree entriesAtPoint: x @ y) asArray equals: (list entriesAtPoint: x @ y) asArray.
+			self
+				assert: (tree entriesAtRectangle: (x @ y extent: 30 @ 20)) asArray
+				equals: (list entriesAtRectangle: (x @ y extent: 30 @ 20)) asArray ] ]
+]
+
+{ #category : 'tests - updating' }
+RTreeRegressionTest >> testPendingUpdatesAreAppliedBeforeEveryQuery [
+	"a few far moves are applied one by one, many of them by building the tree again: either way
+	every query sees the new rectangles, and remove:, add:, copy and size work in between"
+	#( 3 200 ) do: [ :moves | | tree list boxes random far queries |
+		tree := RTreeCollection new.
+		list := RTSequenceableCollection new.
+		boxes := self randomBoxes: 400 seed: 27.
+		boxes do: [ :each | tree add: each. list add: each ].
+		random := Random seed: 28.
+		"boxes first and boxes second are removed and added again below"
+		far := [ (boxes copyFrom: 3 to: moves + 2) do: [ :each |
+				each position: (random next * 3000) @ (random next * 3000).
+				tree updateEntry: each.
+				list updateEntry: each ] ].
+		queries := {
+			[ :c | (c entriesAtPoint: (boxes at: 2) position + (1 @ 1)) asArray ].
+			[ :c | (c entriesAtRectangle: ((boxes at: 3) position extent: 50 @ 50)) asArray ].
+			[ :c | c entryAtPoint: (boxes at: 2) position + (1 @ 1) ifNone: [ nil ] ].
+			[ :c | c entryAtPoint: (boxes at: 1) position + (1 @ 1) satisfying: [ :each | true ] ifNone: [ nil ] ].
+			[ :c | (c entriesInside: ((boxes at: 3) position - (5 @ 5) extent: 100 @ 100)) asArray ].
+			[ :c | (c entriesNear: (boxes at: 1) position within: 30) asArray ].
+			[ :c | c nearestEntryTo: (boxes at: 2) position - (40 @ 40) ].
+			[ :c | c bounds ].
+			[ :c | (c copy entriesAtPoint: (boxes at: 1) position + (1 @ 1)) asArray ] }.
+		queries do: [ :query |
+			far value.
+			self assert: (query value: tree) equals: (query value: list) ].
+		far value.
+		self assert: tree rectangle equals: list bounds.
+		far value.
+		self assert: tree size equals: 400.
+		self assert: (tree includes: boxes first).
+		self assert: tree asIdentitySet equals: list asIdentitySet.
+		tree remove: boxes first.
+		list remove: boxes first.
+		tree remove: (boxes at: 2).
+		list remove: (boxes at: 2).
+		self assert: (tree entriesAtPoint: (boxes at: 3) position + (1 @ 1)) asArray equals: (list entriesAtPoint: (boxes at: 3) position + (1 @ 1)) asArray.
+		far value.
+		tree add: boxes first.
+		list add: boxes first.
+		"boxes first is now the last of the list but keeps its entryIndex"
+		self assert: (tree entriesAtRectangle: (-10 @ -10 corner: 4000 @ 4000)) asIdentitySet equals: list asIdentitySet.
+		self assertTight: tree ]
+]
+
+{ #category : 'tests - updating' }
+RTreeRegressionTest >> testPendingUpdateOfAnEntryThatBecomesNaN [
+	| tree boxes nan |
+	tree := RTreeCollection new.
+	boxes := self randomBoxes: 100 seed: 29.
+	tree addAll: boxes.
+	nan := boxes first.
+	nan position: Float nan @ 5.
+	tree updateEntry: nan.
+	(boxes allButFirst first: 40) do: [ :each |
+		each position: each position + (2000 @ 0).
+		tree updateEntry: each ].
+	self assert: tree size equals: 100.
+	self assert: (tree outliers includes: nan).
+	self assert: (tree entriesAtPoint: (boxes at: 2) position + (1 @ 1)) asArray equals: { boxes at: 2 }.
+	self assertTight: tree.
+	tree remove: nan.
+	self assert: tree size equals: 99
+]
+

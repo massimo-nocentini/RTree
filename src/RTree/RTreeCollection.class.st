@@ -11,6 +11,10 @@ The tree is balanced, then it does not have the order for the elements. User sho
 An entry is held once (adding it again does nothing). `leaves` maps each entry to its leaf, and every node knows its parent:
 remove: and updateEntry: walk up from the leaf, they neither search the tree nor read the rectangle of the entry.
 
+updateEntry: changes the leaf in place when the entry stays near. Otherwise it only records the entry in `pending`: the tree keeps
+its previous rectangle until the next query, which applies the pending updates first (see applyPendingUpdates). When many entries
+moved, as after a layout, the whole tree is built again at once, in Sort-Tile-Recursive order, like bulkLoad:.
+
 Use the inspector to visualize the RTree
 "
 Class {
@@ -20,7 +24,8 @@ Class {
 		'root',
 		'outliers',
 		'leaves',
-		'indexedRoot'
+		'indexedRoot',
+		'pending'
 	],
 	#category : 'RTree-Collections',
 	#package : 'RTree',
@@ -29,6 +34,7 @@ Class {
 
 { #category : 'visiting' }
 RTreeCollection >> accept: visitor [
+	self applyPendingUpdates.
 	root accept: visitor
 ]
 
@@ -51,6 +57,7 @@ RTreeCollection >> add: anRTEntry [
 RTreeCollection >> bounds [
 	"the rectangle of the root is the union of the entries in the tree, see RTAbstractCollection>>bounds"
 	| bounds |
+	self applyPendingUpdates.
 	bounds := root isEmpty ifTrue: [ nil ] ifFalse: [ root rectangle ].
 	outliers ifNotNil: [
 		outliers do: [ :each | bounds := self mergeBounds: bounds with: each encompassingRectangle ] ].
@@ -73,7 +80,13 @@ RTreeCollection >> bulkLoad: aCollectionOfRTEntry [
 				ifTrue: [ entries add: each ]
 				ifFalse: [ self outliers add: each ] ] ].
 	entries ifEmpty: [ ^ self ].
-	root := RTNode fromEntries: (self sortTileRecursive: entries) from: 1 to: entries size.
+	self buildTreeFrom: entries
+]
+
+{ #category : 'private - adding' }
+RTreeCollection >> buildTreeFrom: aCollectionOfRTEntry [
+	"a balanced tree of the entries, whose rectangles are finite, in Sort-Tile-Recursive order"
+	root := RTNode fromEntries: (self sortTileRecursive: aCollectionOfRTEntry) from: 1 to: aCollectionOfRTEntry size.
 	self rebuildLeaves
 ]
 
@@ -112,6 +125,22 @@ RTreeCollection >> addToTree: anRTEntry [
 	root ensureBalancePath: path
 ]
 
+{ #category : 'private - update' }
+RTreeCollection >> applyPendingUpdates [
+	"The entries in pending moved without the tree knowing their new rectangle: it holds them
+	with their previous one, and every node contains them. Called before every query.
+	When more than 1/8 of the entries moved (a layout moves all of them), the tree is built again
+	at once in Sort-Tile-Recursive order, which also makes it tight and balanced. Otherwise each
+	entry is updated in place or removed and added again"
+	| entries |
+	(pending isNil or: [ pending isEmpty ]) ifTrue: [ ^ self ].
+	entries := pending.
+	pending := nil.
+	entries size * 8 > self leaves size
+		ifTrue: [ self rebuildTree ]
+		ifFalse: [ entries do: [ :each | self updateTreeEntry: each ] ]
+]
+
 { #category : 'private - removing' }
 RTreeCollection >> balanceRemovedPath: path [
 	"AVL deletion: walk up from the removed leaf, recompute each ancestor and rotate the
@@ -147,6 +176,7 @@ RTreeCollection >> entriesAtPoint: aPoint [
 	first). Only the entries that added something are then ordered, by entryIndex: this is the
 	order of the indexesFromRoot of the hits (see sortResultList:), without computing them"
 	| res groups addHits |
+	self applyPendingUpdates.
 	res := OrderedCollection new.
 	groups := OrderedCollection new.
 	addHits := [ :each | | start |
@@ -167,6 +197,7 @@ RTreeCollection >> entriesAtPoint: aPoint [
 { #category : 'finding/searching' }
 RTreeCollection >> entriesInside: aRectangle [
 	| result |
+	self applyPendingUpdates.
 	result := OrderedCollection new.
 	root entriesInside: aRectangle list: result.
 	outliers ifNotNil: [
@@ -189,6 +220,7 @@ RTreeCollection >> entryAtPoint: aPoint satisfying: aBlock ifNone: noneBlock [
 	"Only the entries whose rectangle holds aPoint are collected, without asking for their hits.
 	They are then tried from the topmost, see firstOf:atPoint:satisfying:ifNone:"
 	| candidates |
+	self applyPendingUpdates.
 	candidates := OrderedCollection new.
 	root entriesWithPoint: aPoint do: [ :each | candidates add: each ].
 	outliers ifNotNil: [ candidates addAll: outliers ].
@@ -198,6 +230,7 @@ RTreeCollection >> entryAtPoint: aPoint satisfying: aBlock ifNone: noneBlock [
 { #category : 'finding/searching' }
 RTreeCollection >> entriesAtRectangle: aRectangle [
 	| res |
+	self applyPendingUpdates.
 	res := OrderedCollection new.
 	root nodesIntersetcsRectangle: aRectangle list: res.
 	outliers ifNotNil: [
@@ -208,6 +241,7 @@ RTreeCollection >> entriesAtRectangle: aRectangle [
 
 { #category : 'accessing' }
 RTreeCollection >> height [
+	self applyPendingUpdates.
 	^ root height
 ]
 
@@ -227,6 +261,7 @@ RTreeCollection >> initialize [
 
 { #category : 'testing' }
 RTreeCollection >> isBalanced [
+	self applyPendingUpdates.
 	^ root isBalanced
 ]
 
@@ -250,6 +285,7 @@ RTreeCollection >> isFiniteRectangle: aRectangle [
 
 { #category : 'testing' }
 RTreeCollection >> isTotalBalanced [
+	self applyPendingUpdates.
 	^ root isTotalBalanced
 ]
 
@@ -275,6 +311,7 @@ RTreeCollection >> nearestEntriesTo: aPoint within: aDistance do: aBlock [
 	entryIndex"
 	| limit heap push |
 	aDistance < 0 ifTrue: [ ^ self ].
+	self applyPendingUpdates.
 	limit := aDistance * aDistance.
 	heap := Heap sortBlock: [ :a :b | self nearItem: a before: b ].
 	push := [ :node | | distance |
@@ -307,6 +344,7 @@ RTreeCollection >> nearestEntryTo: aPoint ifNone: aBlock [
 { #category : 'accessing' }
 RTreeCollection >> outliers [
 	"entries whose rectangle is not finite, they are searched linearly"
+	self applyPendingUpdates.
 	^ outliers ifNil: [ outliers := OrderedCollection new ]
 ]
 
@@ -343,6 +381,7 @@ RTreeCollection >> postCopy [
 	super postCopy.
 	root := root copy.
 	outliers := outliers copy.
+	pending := pending copy.
 	self rebuildLeaves
 ]
 
@@ -363,6 +402,22 @@ RTreeCollection >> pushFront: anRTEntry [
 	"no need it, but the entry should update its entryIndex"
 ]
 
+{ #category : 'private - update' }
+RTreeCollection >> rebuildTree [
+	"the tree built again from its entries and their current rectangles"
+	| entries |
+	entries := OrderedCollection new: self leaves size.
+	root do: [ :each |
+		(self isFiniteRectangle: each encompassingRectangle)
+			ifTrue: [ entries add: each ]
+			ifFalse: [ self outliers add: each ] ].
+	entries isEmpty
+		ifTrue: [
+			self privateRoot: RTNilNode new.
+			self rebuildLeaves ]
+		ifFalse: [ self buildTreeFrom: entries ]
+]
+
 { #category : 'private' }
 RTreeCollection >> rebuildLeaves [
 	"index the leaves and set the parent of every node, O(n)"
@@ -374,6 +429,7 @@ RTreeCollection >> rebuildLeaves [
 
 { #category : 'accessing' }
 RTreeCollection >> rectangle [
+	self applyPendingUpdates.
 	^ root rectangle
 ]
 
@@ -384,6 +440,7 @@ RTreeCollection >> remove: oldRTEntry ifAbsent: anExceptionBlock [
 		index := outliers identityIndexOf: oldRTEntry.
 		index > 0 ifTrue: [ ^ outliers removeAt: index ] ].
 	leaf := self leaves removeKey: oldRTEntry ifAbsent: [ ^ anExceptionBlock value ].
+	pending ifNotNil: [ pending remove: oldRTEntry ifAbsent: [ ] ].
 	"walk up from the leaf: neither a search nor the rectangle of the entry is needed"
 	^ self removeEntry: oldRTEntry path: (self pathTo: leaf) ifAbsent: anExceptionBlock
 ]
@@ -431,6 +488,7 @@ RTreeCollection >> removeAll [
 	"Collection>>removeAll removes while it iterates"
 	root := RTNilNode new.
 	outliers := nil.
+	pending := nil.
 	self rebuildLeaves
 ]
 
@@ -441,6 +499,8 @@ RTreeCollection >> size [
 
 { #category : 'accessing' }
 RTreeCollection >> root [
+	"the nodes hold the current rectangles of the entries"
+	self applyPendingUpdates.
 	^ root
 ]
 
@@ -472,13 +532,55 @@ RTreeCollection >> sortResultList: aCollection [
 RTreeCollection >> updateEntry: anRTEntry [
 	"The rectangle of the entry changed. When the new rectangle stays inside the parent or the
 	grandparent of its leaf, as for most moves of a drag or an animation, the leaf is updated in
-	place and its ancestors are recomputed upwards. Otherwise the entry is removed and added again"
-	| leaf path rectangle |
+	place and its ancestors are recomputed upwards. Otherwise the entry is recorded as pending,
+	and the next query applies the update (see applyPendingUpdates): a layout moves every entry,
+	and the tree is then built again at once instead of removing and adding each entry"
+	| leaf rectangle |
 	leaf := self leaves at: anRTEntry ifAbsent: [ nil ].
 	anRTEntry resetEncompassingRectangle.
 	leaf ifNil: [
 		self remove: anRTEntry.
 		^ self add: anRTEntry ].
+	(pending notNil and: [ pending includes: anRTEntry ]) ifTrue: [ ^ self ].
+	rectangle := anRTEntry encompassingRectangle.
+	((self isFiniteRectangle: rectangle) and: [ self canUpdateLeaf: leaf rectangle: rectangle ])
+		ifFalse: [
+			(pending ifNil: [ pending := IdentitySet new ]) add: anRTEntry.
+			^ self ].
+	self updateLeaf: leaf rectangle: rectangle
+]
+
+{ #category : 'private - update' }
+RTreeCollection >> canUpdateLeaf: aLeaf rectangle: aRectangle [
+	"the parent or the grandparent of aLeaf contains aRectangle, or aLeaf is the root"
+	| parent grandparent |
+	parent := aLeaf parent.
+	parent ifNil: [ ^ aLeaf == root ].
+	(parent rectangle containsRect: aRectangle) ifTrue: [ ^ true ].
+	grandparent := parent parent.
+	^ grandparent notNil and: [ grandparent rectangle containsRect: aRectangle ]
+]
+
+{ #category : 'private - update' }
+RTreeCollection >> updateLeaf: aLeaf rectangle: aRectangle [
+	"aRectangle is inside an ancestor of aLeaf: recompute the ancestors up to the first one that does not change"
+	| node |
+	aLeaf rectangle: aRectangle.
+	node := aLeaf parent.
+	[ node isNil ] whileFalse: [ | old |
+		old := node rectangle.
+		node computeRectangle.
+		"the ancestors of an unchanged node do not change"
+		node rectangle = old ifTrue: [ ^ self ].
+		node := node parent ]
+]
+
+{ #category : 'private - update' }
+RTreeCollection >> updateTreeEntry: anRTEntry [
+	"apply a pending update: change the leaf in place when the entry stays near, otherwise remove
+	the leaf and add the entry again"
+	| leaf path rectangle |
+	leaf := self leaves at: anRTEntry ifAbsent: [ ^ self ].
 	rectangle := anRTEntry encompassingRectangle.
 	path := self pathTo: leaf.
 	((self isFiniteRectangle: rectangle) and: [ self canUpdateIn: path rectangle: rectangle ])
@@ -487,13 +589,7 @@ RTreeCollection >> updateEntry: anRTEntry [
 			self leaves removeKey: anRTEntry.
 			self removeEntry: anRTEntry path: path ifAbsent: [ self errorNotFound: anRTEntry ].
 			^ self add: anRTEntry ].
-	leaf rectangle: rectangle.
-	(path size - 1 to: 1 by: -1) do: [ :index | | node old |
-		node := (path at: index) value.
-		old := node rectangle.
-		node computeRectangle.
-		"the ancestors of an unchanged node do not change"
-		node rectangle = old ifTrue: [ ^ self ] ]
+	self updateLeaf: leaf rectangle: rectangle
 ]
 
 { #category : 'private - update' }

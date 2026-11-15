@@ -31,6 +31,14 @@ RTNode class >> fromEntries: anArray from: start to: stop [
 ]
 
 { #category : 'instance creation' }
+RTNode class >> new: anRTEntry rectangle: aRectangle [
+	"a leaf of anRTEntry, stored with aRectangle"
+	^ self basicNew
+		fromEntry: anRTEntry rectangle: aRectangle;
+		yourself
+]
+
+{ #category : 'instance creation' }
 RTNode class >> new: anRTEntry [
 	^ self basicNew
 		fromEntry: anRTEntry;
@@ -48,7 +56,9 @@ RTNode >> add: anRTEntry path: list [
 	self isLeaf ifTrue: [ | newLeaf |
 		"create the new leaf first: if anRTEntry fails, the node is unchanged"
 		newLeaf := self class new: anRTEntry.
-		self left: (self class new: self contents).
+		"the previous entry keeps the rectangle the tree knows: when its update is pending, the
+		ancestors contain that rectangle, not its new one"
+		self left: (self class new: self contents rectangle: rectangle).
 		self right: newLeaf.
 		height := 2.
 		contents := nil.
@@ -213,9 +223,14 @@ RTNode >> ensureBalancePath: aCollection [
 
 { #category : 'private' }
 RTNode >> fromEntry: anRTEntry [
+	self fromEntry: anRTEntry rectangle: anRTEntry encompassingRectangle
+]
+
+{ #category : 'private' }
+RTNode >> fromEntry: anRTEntry rectangle: aRectangle [
 	contents := anRTEntry.
 	height := 1.
-	rectangle := anRTEntry encompassingRectangle
+	rectangle := aRectangle
 ]
 
 { #category : 'initialization' }
