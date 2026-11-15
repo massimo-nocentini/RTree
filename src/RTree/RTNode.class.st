@@ -9,7 +9,8 @@ Class {
 		'left',
 		'right',
 		'rectangle',
-		'height'
+		'height',
+		'parent'
 	],
 	#category : 'RTree-Nodes',
 	#package : 'RTree',
@@ -34,8 +35,8 @@ RTNode >> add: anRTEntry path: list [
 	self isLeaf ifTrue: [ | newLeaf |
 		"create the new leaf first: if anRTEntry fails, the node is unchanged"
 		newLeaf := self class new: anRTEntry.
-		left := self class new: self contents.
-		right := newLeaf.
+		self left: (self class new: self contents).
+		self right: newLeaf.
 		height := 2.
 		contents := nil.
 		rectangle := left rectangle merge: right rectangle
@@ -173,7 +174,9 @@ RTNode >> fromNode: aNode [
 	left := aNode left.
 	right := aNode right.
 	rectangle := aNode rectangle.
-	height := aNode height
+	height := aNode height.
+	left ifNotNil: [ left parent: self ].
+	right ifNotNil: [ right parent: self ]
 ]
 
 { #category : 'accessing' }
@@ -184,6 +187,15 @@ RTNode >> height [
 { #category : 'accessing' }
 RTNode >> height: anInteger [
 	height := anInteger
+]
+
+{ #category : 'private' }
+RTNode >> indexLeavesIn: aDictionary [
+	left ifNil: [ ^ aDictionary at: contents put: self ].
+	left parent: self.
+	right parent: self.
+	left indexLeavesIn: aDictionary.
+	right indexLeavesIn: aDictionary
 ]
 
 { #category : 'inspector' }
@@ -247,7 +259,8 @@ RTNode >> left [
 
 { #category : 'accessing' }
 RTNode >> left: aRSRNode [
-	left := aRSRNode
+	left := aRSRNode.
+	aRSRNode ifNotNil: [ aRSRNode parent: self ]
 ]
 
 { #category : 'private' }
@@ -301,11 +314,21 @@ RTNode >> nodesWithPoint: aPoint list: aCollection [
 	right nodesWithPoint: aPoint list: aCollection
 ]
 
+{ #category : 'accessing' }
+RTNode >> parent [
+	^ parent
+]
+
+{ #category : 'accessing' }
+RTNode >> parent: aNode [
+	parent := aNode
+]
+
 { #category : 'copying' }
 RTNode >> postCopy [
 	super postCopy.
-	left := left copy.
-	right := right copy
+	left ifNotNil: [ self left: left copy ].
+	right ifNotNil: [ self right: right copy ]
 ]
 
 { #category : 'accessing' }
@@ -325,7 +348,8 @@ RTNode >> right [
 
 { #category : 'accessing' }
 RTNode >> right: aRSRNode [
-	right := aRSRNode
+	right := aRSRNode.
+	aRSRNode ifNotNil: [ aRSRNode parent: self ]
 ]
 
 { #category : 'private' }

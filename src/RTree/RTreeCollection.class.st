@@ -8,6 +8,9 @@ The time searching this elements should be close to log(n)
 
 The tree is balanced, then it does not have the order for the elements. User should define an index `shapeIndex` to keed the order.
 
+An entry is held once (adding it again does nothing). `leaves` maps each entry to its leaf, and every node knows its parent:
+remove: and updateEntry: walk up from the leaf, they neither search the tree nor read the rectangle of the entry.
+
 Use the inspector to visualize the RTree
 "
 Class {
@@ -15,7 +18,9 @@ Class {
 	#superclass : 'RTAbstractCollection',
 	#instVars : [
 		'root',
-		'outliers'
+		'outliers',
+		'leaves',
+		'indexedRoot'
 	],
 	#category : 'RTree-Collections',
 	#package : 'RTree',
@@ -32,12 +37,31 @@ RTreeCollection >> add: anRTEntry [
 	| rectangle |
 	"ask the rectangle before touching the tree: an entry that cannot answer it must not break the tree"
 	rectangle := anRTEntry encompassingRectangle.
+	"an entry is held once"
+	(self includes: anRTEntry) ifTrue: [ ^ anRTEntry ].
 	(self isFiniteRectangle: rectangle) ifFalse: [
 		"a NaN or an infinite rectangle cannot be merged with the others, keep it aside"
 		self outliers add: anRTEntry.
 		^ anRTEntry ].
-	root := root addChild: anRTEntry.
+	self addToTree: anRTEntry.
 	^ anRTEntry
+]
+
+{ #category : 'private - adding' }
+RTreeCollection >> addToTree: anRTEntry [
+	| path leaf |
+	root isEmpty ifTrue: [
+		self privateRoot: (RTNode new: anRTEntry).
+		^ self leaves at: anRTEntry put: root ].
+	path := OrderedCollection with: root.
+	root add: anRTEntry path: path.
+	"the last node of the path was a leaf, it now holds the previous entry on the left
+	and anRTEntry on the right. The rotations below keep the leaves"
+	leaf := path last value.
+	self leaves
+		at: leaf left contents put: leaf left;
+		at: anRTEntry put: leaf right.
+	root ensureBalancePath: path
 ]
 
 { #category : 'private - removing' }
@@ -101,10 +125,18 @@ RTreeCollection >> height [
 	^ root height
 ]
 
+{ #category : 'testing' }
+RTreeCollection >> includes: anObject [
+	"identity, as remove:"
+	^ (self leaves includesKey: anObject)
+		or: [ outliers notNil and: [ outliers identityIncludes: anObject ] ]
+]
+
 { #category : 'initialization' }
 RTreeCollection >> initialize [
 	super initialize.
-	root := RTNilNode new
+	root := RTNilNode new.
+	self rebuildLeaves
 ]
 
 { #category : 'testing' }
@@ -141,12 +173,47 @@ RTreeCollection >> outliers [
 	^ outliers ifNil: [ outliers := OrderedCollection new ]
 ]
 
+{ #category : 'accessing' }
+RTreeCollection >> leaves [
+	"entry -> leaf. It is rebuilt when the root was replaced without the collection
+	knowing, by the bulk load of a subclass for example"
+	(leaves isNil or: [ indexedRoot ~~ root ]) ifTrue: [ self rebuildLeaves ].
+	^ leaves
+]
+
+{ #category : 'private - removing' }
+RTreeCollection >> pathTo: aLeaf [
+	"the path from the root to aLeaf, as RTNode>>searchPath: answers it, built from the parents.
+	Empty when the parents do not lead to the root"
+	| path node parent |
+	path := OrderedCollection new.
+	node := aLeaf.
+	[ (parent := node parent) notNil ] whileTrue: [
+		parent right == node
+			ifTrue: [ path addFirst: true -> node ]
+			ifFalse: [
+				parent left == node ifFalse: [ ^ #() ].
+				path addFirst: false -> node ].
+		node := parent ].
+	node == root ifFalse: [ ^ #() ].
+	path addFirst: nil -> node.
+	^ path
+]
+
 { #category : 'copying' }
 RTreeCollection >> postCopy [
 	"the nodes are copied, the entries are shared"
 	super postCopy.
 	root := root copy.
-	outliers := outliers copy
+	outliers := outliers copy.
+	self rebuildLeaves
+]
+
+{ #category : 'private' }
+RTreeCollection >> privateRoot: aNode [
+	root := aNode.
+	root parent: nil.
+	indexedRoot := root
 ]
 
 { #category : 'shapes - ordering' }
@@ -159,6 +226,15 @@ RTreeCollection >> pushFront: anRTEntry [
 	"no need it, but the entry should update its entryIndex"
 ]
 
+{ #category : 'private' }
+RTreeCollection >> rebuildLeaves [
+	"index the leaves and set the parent of every node, O(n)"
+	leaves := IdentityDictionary new.
+	root parent: nil.
+	root indexLeavesIn: leaves.
+	indexedRoot := root
+]
+
 { #category : 'accessing' }
 RTreeCollection >> rectangle [
 	^ root rectangle
@@ -166,17 +242,22 @@ RTreeCollection >> rectangle [
 
 { #category : 'removing' }
 RTreeCollection >> remove: oldRTEntry ifAbsent: anExceptionBlock [
-	| path index |
+	| path index leaf |
 	outliers ifNotNil: [
 		index := outliers identityIndexOf: oldRTEntry.
 		index > 0 ifTrue: [ ^ outliers removeAt: index ] ].
-	path := root searchPath: oldRTEntry.
-	"the search is guided by the current rectangle of the entry. When it changed
-	without the collection being told, the stored leaf is elsewhere: look everywhere"
-	path ifEmpty: [ path := root searchPathIgnoringBounds: oldRTEntry ].
-	path ifEmpty: [ ^ anExceptionBlock value ].
+	leaf := self leaves removeKey: oldRTEntry ifAbsent: [ ^ anExceptionBlock value ].
+	"walk up from the leaf: neither a search nor the rectangle of the entry is needed"
+	path := self pathTo: leaf.
+	path ifEmpty: [
+		"the parents were not maintained by whoever built the nodes, search the entry"
+		path := root searchPath: oldRTEntry.
+		"the search is guided by the current rectangle of the entry. When it changed
+		without the collection being told, the stored leaf is elsewhere: look everywhere"
+		path ifEmpty: [ path := root searchPathIgnoringBounds: oldRTEntry ].
+		path ifEmpty: [ ^ anExceptionBlock value ] ].
 	path size = 1 ifTrue: [
-		root := RTNilNode new.
+		self privateRoot: RTNilNode new.
 	] ifFalse: [
 		self removeLastNodeInPath: path.
 	].
@@ -196,6 +277,7 @@ RTreeCollection >> removeLastNodeInPath: path [
 		ifFalse: [ parent right ].
 
 	parent fromNode: brother.
+	brother isLeaf ifTrue: [ self leaves at: parent contents put: parent ].
 	path size < 3 ifTrue: [ ^ self ].
 	self balanceRemovedPath: path
 ]
@@ -204,7 +286,13 @@ RTreeCollection >> removeLastNodeInPath: path [
 RTreeCollection >> removeAll [
 	"Collection>>removeAll removes while it iterates"
 	root := RTNilNode new.
-	outliers := nil
+	outliers := nil.
+	self rebuildLeaves
+]
+
+{ #category : 'accessing' }
+RTreeCollection >> size [
+	^ self leaves size + (outliers ifNil: [ 0 ] ifNotNil: [ outliers size ])
 ]
 
 { #category : 'accessing' }

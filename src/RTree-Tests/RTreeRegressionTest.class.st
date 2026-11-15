@@ -263,3 +263,89 @@ RTreeRegressionTest >> testRemoveKeepsAVLBalance [
 			i \\ 16 = 0 ifTrue: [ self assertTight: tree ] ].
 		self assert: tree isEmpty ]
 ]
+
+{ #category : 'tests - adding' }
+RTreeRegressionTest >> testAddTwiceHoldsOnce [
+	"An entry added twice had two leaves, and updateEntry: moved only one of them"
+	| tree boxes box |
+	tree := RTreeCollection new.
+	boxes := self randomBoxes: 20 seed: 16.
+	tree addAll: boxes.
+	box := boxes first.
+	tree add: box.
+	self assert: tree size equals: 20.
+	box position: 1300 @ 1300.
+	tree updateEntry: box.
+	self assert: (tree entriesAtPoint: 1305 @ 1305) asArray equals: { box }.
+	self deny: ((tree entriesAtRectangle: (1290 @ 1290 corner: 1320 @ 1320)) isEmpty).
+	tree remove: box.
+	self deny: (tree includes: box).
+	self deny: ((tree entriesAtRectangle: (-10 @ -10 corner: 2000 @ 2000)) includes: box).
+	self assertTight: tree
+]
+
+{ #category : 'tests - removing' }
+RTreeRegressionTest >> testParentsAndLeaves [
+	"Every node knows its parent and every entry its leaf, after adds, removals and copies"
+	| tree boxes check copy |
+	check := [ :aTree | | leafCount |
+		leafCount := 0.
+		aTree root withAllChildren do: [ :node |
+			node isLeaf
+				ifTrue: [
+					leafCount := leafCount + 1.
+					self assert: (aTree leaves at: node contents) identicalTo: node ]
+				ifFalse: [
+					self assert: node left parent identicalTo: node.
+					self assert: node right parent identicalTo: node ] ].
+		self assert: aTree root parent isNil.
+		self assert: aTree leaves size equals: leafCount ].
+	tree := RTreeCollection new.
+	boxes := self randomBoxes: 400 seed: 17.
+	tree addAll: boxes.
+	check value: tree.
+	(boxes first: 150) do: [ :each | tree remove: each ].
+	check value: tree.
+	copy := tree copy.
+	check value: copy.
+	(boxes last: 100) do: [ :each | copy remove: each ].
+	check value: copy.
+	check value: tree.
+	self assert: tree size equals: 250.
+	self assert: copy size equals: 150
+]
+
+{ #category : 'tests - removing' }
+RTreeRegressionTest >> testRemoveDoesNotNeedTheRectangle [
+	"remove: walks up from the leaf of the entry, so it reads no rectangle and costs
+	O(log n) even when every entry has the same rectangle (the shapes of a builder before the layout)"
+	| tree boxes box |
+	tree := RTreeCollection new.
+	boxes := (1 to: 1024) collect: [ :i | self boxAt: 0 @ 0 extent: 10 @ 10 index: i ].
+	tree addAll: boxes.
+	box := boxes at: 700.
+	"the entry cannot answer its rectangle anymore"
+	box position: nil; resetEncompassingRectangle.
+	self should: [ box encompassingRectangle ] raise: Error.
+	self assert: (tree remove: box) identicalTo: box.
+	self assert: tree size equals: 1023.
+	self deny: (tree includes: box).
+	(boxes first: 600) do: [ :each | tree remove: each ].
+	self assert: tree size equals: 423.
+	self assertTight: tree
+]
+
+{ #category : 'tests - removing' }
+RTreeRegressionTest >> testSubclassThatSetsTheRoot [
+	"the index is rebuilt when a subclass (RTBulkLoadRTreeCollection in Roassal) sets the root itself"
+	| tree other boxes |
+	other := RTreeCollection new.
+	boxes := self randomBoxes: 50 seed: 18.
+	other addAll: boxes.
+	tree := RTreeCollection new.
+	tree instVarNamed: 'root' put: other root copy.
+	self assert: tree size equals: 50.
+	self assert: (tree remove: boxes first) identicalTo: boxes first.
+	self assert: tree size equals: 49.
+	self assertTight: tree
+]

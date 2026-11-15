@@ -32,6 +32,10 @@ RTAbstractNode >> height [
 	^ 0
 ]
 
+{ #category : 'private' }
+RTAbstractNode >> indexLeavesIn: aDictionary [
+]
+
 { #category : 'testing' }
 RTAbstractNode >> isBalanced [
 	^ true
@@ -58,6 +62,15 @@ RTAbstractNode >> nodesIntersetcsRectangle: aRectangle list: list [
 
 { #category : 'finding/searching' }
 RTAbstractNode >> nodesWithPoint: aPoint list: list [
+]
+
+{ #category : 'accessing' }
+RTAbstractNode >> parent [
+	^ nil
+]
+
+{ #category : 'accessing' }
+RTAbstractNode >> parent: aNode [
 ]
 
 { #category : 'accessing' }
