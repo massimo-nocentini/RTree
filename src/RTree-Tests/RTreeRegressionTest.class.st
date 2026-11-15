@@ -432,3 +432,31 @@ RTreeRegressionTest >> testEntriesAtPointOfLongEntries [
 		p := (random next * 1000) @ (random next * 1000).
 		self assert: (tree entriesAtPoint: p) asArray equals: (list entriesAtPoint: p) asArray ]
 ]
+
+{ #category : 'tests - adding' }
+RTreeRegressionTest >> testBulkLoad [
+	"bulkLoad: (used by useRTree) built the tree by repeated add:. It now builds a
+	balanced tree in Sort-Tile-Recursive order that accepts later changes"
+	| tree list boxes nan random |
+	boxes := self randomBoxes: 1000 seed: 25.
+	nan := self boxAt: Float nan @ 0 extent: 10 @ 10 index: 1001.
+	tree := RTreeCollection new.
+	tree bulkLoad: boxes , { nan. boxes first }.
+	list := RTSequenceableCollection new.
+	list addAll: boxes.
+	self assert: tree size equals: 1001.
+	self assert: tree isTotalBalanced.
+	self assert: tree height <= 11.
+	self assertTight: tree.
+	random := Random seed: 26.
+	100 timesRepeat: [ | p w |
+		p := (random next * 1000) @ (random next * 1000).
+		w := p extent: 50 @ 50.
+		self assert: (tree entriesAtPoint: p) asArray equals: (list entriesAtPoint: p) asArray.
+		self assert: ((tree entriesAtRectangle: w) copyWithout: nan) asArray equals: (list entriesAtRectangle: w) asArray ].
+	(boxes first: 400) do: [ :each | tree remove: each ].
+	(boxes last: 100) do: [ :each | each position: each position + (3 @ 3). tree updateEntry: each ].
+	tree add: (self boxAt: 5 @ 5 extent: 10 @ 10 index: 1002).
+	self assert: tree size equals: 602.
+	self assertTight: tree
+]

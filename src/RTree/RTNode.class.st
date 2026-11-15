@@ -18,6 +18,19 @@ Class {
 }
 
 { #category : 'instance creation' }
+RTNode class >> fromEntries: anArray from: start to: stop [
+	"a balanced tree of the entries from start to stop, the halves differ by at most one entry"
+	| middle |
+	start = stop ifTrue: [ ^ self new: (anArray at: start) ].
+	middle := start + stop // 2.
+	^ self new
+		left: (self fromEntries: anArray from: start to: middle);
+		right: (self fromEntries: anArray from: middle + 1 to: stop);
+		computeRectangle;
+		yourself
+]
+
+{ #category : 'instance creation' }
 RTNode class >> new: anRTEntry [
 	^ self basicNew
 		fromEntry: anRTEntry;

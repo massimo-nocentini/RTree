@@ -47,6 +47,44 @@ RTreeCollection >> add: anRTEntry [
 	^ anRTEntry
 ]
 
+{ #category : 'adding' }
+RTreeCollection >> bulkLoad: aCollectionOfRTEntry [
+	"RSCanvas>>shapeCollection: (useRTree) gives the existing shapes here. An empty tree is
+	built at once from the entries in Sort-Tile-Recursive order, halved recursively:
+	a balanced tree of nearby entries, in O(n log n) without any insertion"
+	| seen entries |
+	self isEmpty ifFalse: [ ^ super bulkLoad: aCollectionOfRTEntry ].
+	seen := IdentitySet new.
+	entries := OrderedCollection new: aCollectionOfRTEntry size.
+	aCollectionOfRTEntry do: [ :each |
+		(seen includes: each) ifFalse: [
+			seen add: each.
+			(self isFiniteRectangle: each encompassingRectangle)
+				ifTrue: [ entries add: each ]
+				ifFalse: [ self outliers add: each ] ] ].
+	entries ifEmpty: [ ^ self ].
+	root := RTNode fromEntries: (self sortTileRecursive: entries) from: 1 to: entries size.
+	self rebuildLeaves
+]
+
+{ #category : 'private - adding' }
+RTreeCollection >> sortTileRecursive: aCollection [
+	"the entries sorted by the x of their center into about sqrt(n) vertical slices, each slice sorted by y"
+	| items sliceSize sorted index |
+	items := (aCollection collect: [ :each | | r |
+		r := each encompassingRectangle.
+		Array with: r origin x + r corner x with: r origin y + r corner y with: each ]) asArray.
+	items sort: [ :a :b | a first <= b first ].
+	sliceSize := (items size / items size sqrt ceiling) ceiling.
+	sorted := Array new: items size.
+	index := 0.
+	1 to: items size by: sliceSize do: [ :start | | slice |
+		slice := items copyFrom: start to: (start + sliceSize - 1 min: items size).
+		slice sort: [ :a :b | a second <= b second ].
+		slice do: [ :each | sorted at: (index := index + 1) put: each third ] ].
+	^ sorted
+]
+
 { #category : 'private - adding' }
 RTreeCollection >> addToTree: anRTEntry [
 	| path leaf |
