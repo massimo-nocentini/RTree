@@ -106,28 +106,33 @@ RTAbstractCollection >> entryAtPoint: aPoint satisfying: aBlock ifNone: noneBloc
 RTAbstractCollection >> firstOf: candidates atPoint: aPoint satisfying: aBlock ifNone: noneBlock [
 	"candidates is a sequence of the entries whose rectangle may hold aPoint. entriesAtPoint: lets
 	each of them add its hits, and orders them by decreasing entryIndex (nil counts as 0), keeping
-	the order of the candidates that share an index. The same order is followed here, lazily:
-	the topmost candidate is usually the answer, the others are sorted only when it is not"
-	| best bestIndex rest |
+	the order of the candidates that share an index. The same order is followed here: the topmost
+	candidate is usually the answer. When it is not (long lines have many candidates and few
+	hits), one pass over the others keeps the first hit that satisfies aBlock of the candidate of
+	the largest index, without sorting them"
+	| top topIndex hits found foundIndex |
 	candidates isEmpty ifTrue: [ ^ noneBlock value ].
-	best := 1.
-	bestIndex := (candidates at: 1) entryIndex ifNil: [ 0 ].
+	top := 1.
+	topIndex := (candidates at: 1) entryIndex ifNil: [ 0 ].
 	2 to: candidates size do: [ :i | | index |
 		index := (candidates at: i) entryIndex ifNil: [ 0 ].
-		index > bestIndex ifTrue: [
-			best := i.
-			bestIndex := index ] ].
-	((candidates at: best) firstEntryAtPoint: aPoint satisfying: aBlock ifNone: [ nil ])
-		ifNotNil: [ :found | ^ found ].
-	candidates size = 1 ifTrue: [ ^ noneBlock value ].
-	rest := OrderedCollection new: candidates size - 1.
-	candidates doWithIndex: [ :each :i | i = best ifFalse: [ rest add: each ] ].
-	"a stable sort, as in entriesAtPoint:"
-	rest sort: [ :a :b | (a entryIndex ifNil: [ 0 ]) >= (b entryIndex ifNil: [ 0 ]) ].
-	rest do: [ :each |
-		(each firstEntryAtPoint: aPoint satisfying: aBlock ifNone: [ nil ])
-			ifNotNil: [ :found | ^ found ] ].
-	^ noneBlock value
+		index > topIndex ifTrue: [
+			top := i.
+			topIndex := index ] ].
+	((candidates at: top) firstEntryAtPoint: aPoint satisfying: aBlock ifNone: [ nil ])
+		ifNotNil: [ :entry | ^ entry ].
+	hits := OrderedCollection new.
+	candidates doWithIndex: [ :each :i | | index |
+		index := each entryIndex ifNil: [ 0 ].
+		(i ~= top and: [ found isNil or: [ index > foundIndex ] ]) ifTrue: [ | k |
+			k := hits size.
+			each addEntriesIn: hits position: aPoint.
+			[ (k := k + 1) <= hits size ] whileTrue: [
+				(aBlock value: (hits at: k)) ifTrue: [
+					found := hits at: k.
+					foundIndex := index.
+					k := hits size ] ] ] ].
+	^ found ifNil: [ noneBlock value ]
 ]
 
 { #category : 'shapes - ordering' }
