@@ -36,6 +36,10 @@ RTAbstractNode >> height [
 RTAbstractNode >> indexLeavesIn: aDictionary [
 ]
 
+{ #category : 'finding/searching' }
+RTAbstractNode >> entriesWithPoint: aPoint do: aBlock [
+]
+
 { #category : 'testing' }
 RTAbstractNode >> isBalanced [
 	^ true

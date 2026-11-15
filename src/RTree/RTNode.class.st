@@ -138,6 +138,22 @@ RTNode >> do: aBlock [
 			 ]
 ]
 
+{ #category : 'finding/searching' }
+RTNode >> entriesWithPoint: aPoint do: aBlock [
+	"evaluates aBlock with every entry whose rectangle holds aPoint. The rectangle is closed,
+	the entry decides about its border, see nodesWithPoint:list:"
+	| x y origin corner |
+	x := aPoint x.
+	y := aPoint y.
+	origin := rectangle origin.
+	corner := rectangle corner.
+	(origin x <= x and: [ x <= corner x and: [ origin y <= y and: [ y <= corner y ] ] ])
+		ifFalse: [ ^ self ].
+	left ifNil: [ ^ aBlock value: contents ].
+	left entriesWithPoint: aPoint do: aBlock.
+	right entriesWithPoint: aPoint do: aBlock
+]
+
 { #category : 'private' }
 RTNode >> ensureBalancePath: aCollection [
 	| recomputeHeight |

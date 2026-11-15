@@ -94,17 +94,26 @@ RTreeCollection >> do: aBlock [
 
 { #category : 'finding/searching' }
 RTreeCollection >> entriesAtPoint: aPoint [
-
-	| res |
-	"very important to preserv the drawing order"
+	"very important to preserv the drawing order: the topmost entry comes first.
+	Every entry whose rectangle holds aPoint adds its own hits (a composite adds its children
+	first). Only the entries that added something are then ordered, by entryIndex: this is the
+	order of the indexesFromRoot of the hits (see sortResultList:), without computing them"
+	| res groups addHits |
 	res := OrderedCollection new.
-	root nodesWithPoint: aPoint list: res.
-	outliers ifNotNil: [
-		outliers do: [ :each | each addEntriesIn: res position: aPoint ] ].
-	"an entry without parent has no indexesFromRoot, its entryIndex orders it"
-	res := res collect: [ :s | s -> (s indexesFromRoot ifEmpty: [ Array with: (s entryIndex ifNil: [ 0 ]) ]) ].
-	self sortResultList: res.
-	^ res collect: [ :assoc | assoc key ]
+	groups := OrderedCollection new.
+	addHits := [ :each | | start |
+		start := res size.
+		each addEntriesIn: res position: aPoint.
+		res size > start ifTrue: [ groups add: each -> (start + 1 to: res size) ] ].
+	root entriesWithPoint: aPoint do: addHits.
+	outliers ifNotNil: [ outliers do: addHits ].
+	groups size < 2 ifTrue: [ ^ res ].
+	groups sort: [ :a :b | (a key entryIndex ifNil: [ 0 ]) >= (b key entryIndex ifNil: [ 0 ]) ].
+	^ groups
+		inject: (OrderedCollection new: res size)
+		into: [ :sorted :group |
+			group value do: [ :index | sorted add: (res at: index) ].
+			sorted ]
 ]
 
 { #category : 'finding/searching' }

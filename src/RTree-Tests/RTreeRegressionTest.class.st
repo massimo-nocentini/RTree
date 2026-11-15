@@ -414,3 +414,21 @@ RTreeRegressionTest >> testEntriesAtRectangleWithRepeatedOrSparseIndexes [
 	all := tree entriesAtRectangle: (-10 @ -10 corner: 1020 @ 1020).
 	self assert: (all collect: [ :each | each model ]) asArray equals: (1 to: 1000) asArray
 ]
+
+{ #category : 'tests - finding' }
+RTreeRegressionTest >> testEntriesAtPointOfLongEntries [
+	"entriesAtPoint: built an OrderedCollection and an Association for every hit and sorted them all.
+	With long, overlapping entries (the bounding boxes of edges) the order must still be the list's"
+	| tree list random boxes |
+	tree := RTreeCollection new.
+	list := RTSequenceableCollection new.
+	random := Random seed: 24.
+	boxes := (1 to: 400) collect: [ :i | | p q |
+		p := (random next * 1000) @ (random next * 1000).
+		q := (random next * 1000) @ (random next * 1000).
+		self boxAt: (p min: q) extent: (p max: q) - (p min: q) + 1 index: i ].
+	boxes do: [ :each | tree add: each. list add: each ].
+	200 timesRepeat: [ | p |
+		p := (random next * 1000) @ (random next * 1000).
+		self assert: (tree entriesAtPoint: p) asArray equals: (list entriesAtPoint: p) asArray ]
+]
