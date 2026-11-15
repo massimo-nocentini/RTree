@@ -96,6 +96,28 @@ RTCollectionPropertyTest >> assertRTGridCollectionAfter: anOperation [
 ]
 
 { #category : 'checking' }
+RTCollectionPropertyTest >> assertRTLooseQuadtreeCollectionAfter: anOperation [
+	"every record has the rectangle of its entry and fits its node: its center in the cell, its
+	larger side at most the side of the cell; the counts of the nodes add up"
+	| count |
+	count := 0.
+	collection do: [ :entry |
+		(collection itemFor: entry) ifNotNil: [ :item |
+			count := count + 1.
+			self assert: item asRectangle equals: entry encompassingRectangle after: anOperation.
+			self assert: ((item parent items includes: item) and: [
+				item parent containsCenterX: item left + item right / 2 y: item top + item bottom / 2 extent: item maxExtent ]) ] ].
+	self assert: count equals: collection size - collection outliers size.
+	collection root ifNotNil: [ :root |
+		root nodesDo: [ :node | | below |
+			below := node itemCount.
+			node hasChildren ifTrue: [
+				node nodesDo: [ :each | each == node ifFalse: [ below := below + each itemCount ] ] ].
+			self assert: node count equals: below ].
+		self assert: root count equals: count ]
+]
+
+{ #category : 'checking' }
 RTCollectionPropertyTest >> assertQuery: anOperation [
 	| kind |
 	kind := anOperation first.
