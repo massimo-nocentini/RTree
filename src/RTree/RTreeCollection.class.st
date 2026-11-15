@@ -37,7 +37,8 @@ RTreeCollection >> balanceRemovedPath: path [
 
 	(1 to: path size -2) reverseDo: [ :index | | tree |
 		tree := (path at: index) value.
-		tree height: (tree left height max: tree right height)+1.
+		"the removed entry may define the border of every ancestor: recompute the rectangle, not only the height"
+		tree computeRectangle.
 		tree isBalanced ifFalse: [ | toMove brother |
 			tree left height < tree right height ifTrue: [
 				toMove := tree left.
