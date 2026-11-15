@@ -238,3 +238,93 @@ RTCollectionTest >> testSizeAndIncludes [
 	entryCollection removeAll.
 	self assert: entryCollection isEmpty
 ]
+
+{ #category : 'helpers' }
+RTCollectionTest >> randomEntries: count seed: seed [
+	"boxes and composites (nested twice at most) at random places. Most entries share their
+	entryIndex with 3 others, some have none: the order of the collection breaks these ties"
+	| random make |
+	random := Random seed: seed.
+	make := nil.
+	make := [ :model :depth :origin :side | | box width height |
+		width := random next * side / 4 + 1.
+		height := random next * side / 4 + 1.
+		box := (depth < 2 and: [ random next < 0.15 ])
+			ifTrue: [
+				RTreeCompositeBox new
+					lazyHits: random next < 0.5;
+					shapeCollection: self entryCollectionClass new;
+					yourself ]
+			ifFalse: [ RTreeBox new ].
+		box
+			model: model;
+			position: origin + ((random next * side) @ (random next * side));
+			extent: width @ height.
+		(box isKindOf: RTreeCompositeBox) ifTrue: [
+			1 to: 5 do: [ :k |
+				box addShape: (make
+					value: model * 10 + k
+					value: depth + 1
+					value: box position
+					value: (width min: height)) ] ].
+		box ].
+	^ (1 to: count) collect: [ :i | | box |
+		box := make value: i value: 0 value: 0 @ 0 value: 400.
+		box entryIndex: (i \\ 11 = 0
+			ifTrue: [ nil ]
+			ifFalse: [ i // 4 ]).
+		box ]
+]
+
+{ #category : 'tests' }
+RTCollectionTest >> testEntryAtPointSatisfyingIsTheFirstHit [
+	"the topmost query answers the first entry of entriesAtPoint: that satisfies the block,
+	with nested composites, shared and missing entryIndexes, and an infinite entry"
+	| random points blocks infinite |
+	entryCollection addAll: (self randomEntries: 300 seed: 41).
+	infinite := RTreeBox new
+		model: 9999;
+		entryIndex: 150;
+		extent: Float infinity @ Float infinity;
+		yourself.
+	entryCollection add: infinite.
+	"a pile of entries that share one index or have none, beside the others"
+	1 to: 20 do: [ :k |
+		entryCollection add: (RTreeBox new
+			model: 10000 + k;
+			entryIndex: (k odd ifTrue: [ 1000 ] ifFalse: [ nil ]);
+			position: (500 + k) @ (500 - k);
+			extent: 30 @ 30;
+			yourself) ].
+	random := Random seed: 42.
+	points := (1 to: 400) collect: [ :i | (random next * 420 - 10) @ (random next * 420 - 10) ].
+	points := points , ((entryCollection asArray first: 40) collect: [ :each | each position ]).
+	points := points , ((500 to: 550 by: 5) flatCollect: [ :x | (480 to: 530 by: 5) collect: [ :y | x @ y ] ]).
+	blocks := {
+		[ :each | true ].
+		[ :each | false ].
+		[ :each | each model odd ].
+		[ :each | each isKindOf: RTreeCompositeBox ].
+		[ :each | each model \\ 3 = 0 and: [ each ~~ infinite ] ] }.
+	points do: [ :point | | hits |
+		hits := entryCollection entriesAtPoint: point.
+		blocks do: [ :block |
+			self
+				assert: (entryCollection entryAtPoint: point satisfying: block ifNone: [ nil ])
+				identicalTo: (hits detect: block ifNone: [ nil ]) ].
+		self
+			assert: (entryCollection entryAtPoint: point ifNone: [ nil ])
+			identicalTo: (hits ifEmpty: [ nil ] ifNotEmpty: [ hits first ]) ]
+]
+
+{ #category : 'tests' }
+RTCollectionTest >> testEntryAtPointSatisfyingIfNone [
+	| box |
+	box := RTreeBox new size: 10; model: 1; entryIndex: 1; yourself.
+	self assert: (entryCollection entryAtPoint: 5 @ 5 satisfying: [ :each | true ] ifNone: [ #none ]) equals: #none.
+	entryCollection add: box.
+	self assert: (entryCollection entryAtPoint: 5 @ 5 satisfying: [ :each | true ] ifNone: [ #none ]) identicalTo: box.
+	self assert: (entryCollection entryAtPoint: 5 @ 5 satisfying: [ :each | false ] ifNone: [ #none ]) equals: #none.
+	self assert: (entryCollection entryAtPoint: 50 @ 5 satisfying: [ :each | true ] ifNone: [ #none ]) equals: #none
+]
+

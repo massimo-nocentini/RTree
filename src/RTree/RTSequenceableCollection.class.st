@@ -38,6 +38,15 @@ RTSequenceableCollection >> entriesAtRectangle: aRectangle [
 	^ entries select: [ :each | each encompassingRectangle intersects: aRectangle ]
 ]
 
+{ #category : 'finding/searching' }
+RTSequenceableCollection >> entryAtPoint: aPoint satisfying: aBlock ifNone: noneBlock [
+	"the last entries are drawn on top, as in entriesAtPoint:"
+	entries reverseDo: [ :entry |
+		(entry firstEntryAtPoint: aPoint satisfying: aBlock ifNone: [ nil ])
+			ifNotNil: [ :found | ^ found ] ].
+	^ noneBlock value
+]
+
 { #category : 'testing' }
 RTSequenceableCollection >> includes: anObject [
 	"the entries are a Bag, they match with ="

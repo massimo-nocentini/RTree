@@ -155,6 +155,17 @@ RTreeCollection >> entriesAtPoint: aPoint [
 ]
 
 { #category : 'finding/searching' }
+RTreeCollection >> entryAtPoint: aPoint satisfying: aBlock ifNone: noneBlock [
+	"Only the entries whose rectangle holds aPoint are collected, without asking for their hits.
+	They are then tried from the topmost, see firstOf:atPoint:satisfying:ifNone:"
+	| candidates |
+	candidates := OrderedCollection new.
+	root entriesWithPoint: aPoint do: [ :each | candidates add: each ].
+	outliers ifNotNil: [ candidates addAll: outliers ].
+	^ self firstOf: candidates atPoint: aPoint satisfying: aBlock ifNone: noneBlock
+]
+
+{ #category : 'finding/searching' }
 RTreeCollection >> entriesAtRectangle: aRectangle [
 	| res |
 	res := OrderedCollection new.
