@@ -278,13 +278,19 @@ RTNode >> nodesIntersetcsRectangle: aRectangle list: aCollection [
 
 { #category : 'finding/searching' }
 RTNode >> nodesWithPoint: aPoint list: aCollection [
-	(self rectangle containsPoint: aPoint)
+	"The rectangle is closed here (Rectangle>>containsPoint: is not): the entry decides
+	about its own border in addEntriesIn:position:, a line accepts its end points for example.
+	The coordinates are compared directly, this is the inner loop of the hit test"
+	| x y origin corner |
+	x := aPoint x.
+	y := aPoint y.
+	origin := rectangle origin.
+	corner := rectangle corner.
+	(origin x <= x and: [ x <= corner x and: [ origin y <= y and: [ y <= corner y ] ] ])
 		ifFalse: [ ^ self ].
-	self isLeaf ifTrue:[
-		self contents addEntriesIn: aCollection position: aPoint
-	] ifFalse: [
-		self childrenDo: [ :child | child nodesWithPoint: aPoint list: aCollection ]
-	]
+	left ifNil: [ ^ contents addEntriesIn: aCollection position: aPoint ].
+	left nodesWithPoint: aPoint list: aCollection.
+	right nodesWithPoint: aPoint list: aCollection
 ]
 
 { #category : 'copying' }

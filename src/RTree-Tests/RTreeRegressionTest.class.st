@@ -192,3 +192,21 @@ RTreeRegressionTest >> testEntriesAtRectangleWithoutEntryIndex [
 	self assert: (tree entriesAtRectangle: (0 @ 0 corner: 20 @ 20)) size equals: 2.
 	self assert: (tree entriesAtPoint: 7 @ 7) size equals: 2
 ]
+
+{ #category : 'tests - finding' }
+RTreeRegressionTest >> testEntriesOnTheBorderOfTheirRectangle [
+	"The tree pruned with the half-open Rectangle>>containsPoint:, so an entry
+	that accepts the far border of its rectangle (a line end point) was not found"
+	| tree list boxes |
+	tree := RTreeCollection new.
+	list := RTSequenceableCollection new.
+	boxes := (1 to: 20) collect: [ :i |
+		RTreeClosedBox new position: (i * 10) @ 0; extent: 10 @ 10; entryIndex: i; yourself ].
+	boxes do: [ :each | tree add: each. list add: each ].
+	boxes do: [ :each | | corner |
+		corner := each encompassingRectangle corner.
+		{ corner. corner x @ 5. 15 @ corner y. each position } do: [ :p |
+			self
+				assert: (tree entriesAtPoint: p) asArray
+				equals: (list entriesAtPoint: p) asArray ] ]
+]
