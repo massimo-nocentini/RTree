@@ -138,7 +138,19 @@ RTNode >> areaOf: aRectangle mergedWith: anotherRectangle [
 
 { #category : 'public' }
 RTNode >> computeRectangle [
-	rectangle := left rectangle merge: right rectangle.
+	"the union of the rectangles of the children. The Rectangle is kept when it does not change:
+	a new one stored in an old node survives the next scavenge and makes it longer"
+	| leftRectangle rightRectangle originX originY cornerX cornerY |
+	leftRectangle := left rectangle.
+	rightRectangle := right rectangle.
+	originX := leftRectangle origin x min: rightRectangle origin x.
+	originY := leftRectangle origin y min: rightRectangle origin y.
+	cornerX := leftRectangle corner x max: rightRectangle corner x.
+	cornerY := leftRectangle corner y max: rightRectangle corner y.
+	(rectangle notNil and: [
+		rectangle origin x = originX and: [ rectangle origin y = originY and: [
+		rectangle corner x = cornerX and: [ rectangle corner y = cornerY ] ] ] ])
+			ifFalse: [ rectangle := (originX @ originY) corner: (cornerX @ cornerY) ].
 	height := (left height max: right height) + 1
 ]
 
@@ -330,26 +342,25 @@ RTNode >> left: aRSRNode [
 
 { #category : 'private' }
 RTNode >> llrotationZ: z y: y x: x [
-	| a3 a4 new |
+	"y, which the rotation leaves out, becomes the new right child of z"
+	| a3 a4 |
 	a3 := y right.
 	a4 := z right.
-
-	new := self class new.
-	new left: a3; right: a4; computeRectangle.
-	z left: x; right: new; computeRectangle
+	y left: a3; right: a4; computeRectangle.
+	z left: x; right: y; computeRectangle
 ]
 
 { #category : 'private' }
 RTNode >> lrrotationZ: z y: y x: x [
-	| a1 a2 a3 new |
+	"x, which the rotation leaves out, becomes the new left child of y"
+	| a1 a2 a3 |
 	a1 := y left.
 	a2 := x left.
 	a3 := x right.
-	new := self class new.
-	new left: a1; right: a2; computeRectangle.
-	y left: new; right: a3; computeRectangle.
+	x left: a1; right: a2; computeRectangle.
+	y left: x; right: a3; computeRectangle.
 
-	self llrotationZ: z y: y x: new
+	self llrotationZ: z y: y x: x
 ]
 
 { #category : 'finding/searching' }
@@ -427,26 +438,24 @@ RTNode >> right: aRSRNode [
 
 { #category : 'private' }
 RTNode >> rlrotationZ: z y: y x: x [
-	| a1 a2 a3 a4 new |
-	a1 := z left.
+	"x, which the rotation leaves out, becomes the new right child of y"
+	| a2 a3 a4 |
 	a2 := x left.
 	a3 := x right.
 	a4 := y right.
-	new := self class new.
-	new left: a3; right: a4; computeRectangle.
-	y left: a2; right: new; computeRectangle.
-	self rrrotationZ: z y: y x: new
+	x left: a3; right: a4; computeRectangle.
+	y left: a2; right: x; computeRectangle.
+	self rrrotationZ: z y: y x: x
 ]
 
 { #category : 'private' }
 RTNode >> rrrotationZ: z y: y x: x [
-	"right right rotation"
-	| a1 a2 new |
+	"right right rotation: y, which the rotation leaves out, becomes the new left child of z"
+	| a1 a2 |
 	a1 := z left.
 	a2 := y left.
-	new := self class new.
-	new left: a1; right: a2; computeRectangle.
-	z left: new; right: x; computeRectangle
+	y left: a1; right: a2; computeRectangle.
+	z left: y; right: x; computeRectangle
 ]
 
 { #category : 'finding/searching' }
