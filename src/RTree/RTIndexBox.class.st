@@ -122,6 +122,14 @@ RTIndexBox >> setEmpty [
 ]
 
 { #category : 'initialization' }
+RTIndexBox >> setLeft: aLeft top: aTop right: aRight bottom: aBottom [
+	left := aLeft.
+	top := aTop.
+	right := aRight.
+	bottom := aBottom
+]
+
+{ #category : 'initialization' }
 RTIndexBox >> setRectangle: aRectangle [
 	| origin corner |
 	origin := aRectangle origin.

@@ -21,6 +21,13 @@ RTIndexItem class >> on: anRTEntry rectangle: aRectangle [
 		yourself
 ]
 
+{ #category : 'instance creation' }
+RTIndexItem class >> on: anRTEntry left: left top: top right: right bottom: bottom [
+	^ self new
+		setEntry: anRTEntry left: left top: top right: right bottom: bottom;
+		yourself
+]
+
 { #category : 'accessing' }
 RTIndexItem >> entry [
 	^ entry
@@ -34,6 +41,13 @@ RTIndexItem >> keys [
 { #category : 'accessing' }
 RTIndexItem >> keys: anArrayOrNil [
 	keys := anArrayOrNil
+]
+
+{ #category : 'initialization' }
+RTIndexItem >> setEntry: anRTEntry left: aLeft top: aTop right: aRight bottom: aBottom [
+	entry := anRTEntry.
+	stamp := 0.
+	self setLeft: aLeft top: aTop right: aRight bottom: aBottom
 ]
 
 { #category : 'initialization' }
