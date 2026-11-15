@@ -101,3 +101,55 @@ RTreeRegressionTest >> testUpdateAfterTheRectangleChangedSilently [
 	self assert: tree size equals: 32.
 	self assertTight: tree
 ]
+
+{ #category : 'tests - adding' }
+RTreeRegressionTest >> testFailingAddKeepsTheTree [
+	"A failing add: left a 1-element tree with a nil child"
+	| tree box other |
+	tree := RTreeCollection new.
+	box := self boxAt: 0 @ 0 extent: 10 @ 10 index: 1.
+	tree add: box.
+	self should: [ tree add: nil ] raise: Error.
+	self assert: tree size equals: 1.
+	self assert: (tree entriesAtPoint: 5 @ 5) asArray equals: { box }.
+	other := self boxAt: 20 @ 20 extent: 10 @ 10 index: 2.
+	tree add: other.
+	self assert: tree size equals: 2.
+	self assertTight: tree
+]
+
+{ #category : 'tests - adding' }
+RTreeRegressionTest >> testInfiniteRectangle [
+	"An infinite extent gives a NaN corner"
+	| tree boxes inf |
+	tree := RTreeCollection new.
+	boxes := self randomBoxes: 50 seed: 4.
+	tree addAll: boxes.
+	inf := self boxAt: Float infinity negated @ 0 extent: Float infinity @ 10 index: 51.
+	tree add: inf.
+	self assert: tree size equals: 51.
+	self assert: (tree remove: inf) identicalTo: inf.
+	boxes do: [ :each | self assert: ((tree entriesAtPoint: each position + (5 @ 5)) includes: each) ].
+	self assertTight: tree
+]
+
+{ #category : 'tests - adding' }
+RTreeRegressionTest >> testNaNRectangleDoesNotHideTheOthers [
+	"One NaN rectangle turned its ancestors into NaN, and its siblings could not be found nor removed"
+	| tree boxes nan |
+	tree := RTreeCollection new.
+	boxes := self randomBoxes: 256 seed: 3.
+	tree addAll: boxes.
+	nan := self boxAt: Float nan @ Float nan extent: 10 @ 10 index: 257.
+	tree add: nan.
+	self assert: tree size equals: 257.
+	self assert: (tree includes: nan).
+	boxes do: [ :each | self assert: ((tree entriesAtPoint: each position + (5 @ 5)) includes: each) ].
+	"intersects: answers true for NaN, as in RTSequenceableCollection"
+	self assert: ((tree entriesAtRectangle: (0 @ 0 corner: 2000 @ 2000)) includes: nan).
+	self assertTight: tree.
+	(boxes first: 128) do: [ :each | self assert: (tree remove: each) identicalTo: each ].
+	self assert: (tree remove: nan) identicalTo: nan.
+	self assert: tree size equals: 128.
+	self assertTight: tree
+]

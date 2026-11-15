@@ -31,9 +31,11 @@ RTNode >> accept: visitor [
 { #category : 'private' }
 RTNode >> add: anRTEntry path: list [
 	"adds the entry but it loose the balance"
-	self isLeaf ifTrue: [
+	self isLeaf ifTrue: [ | newLeaf |
+		"create the new leaf first: if anRTEntry fails, the node is unchanged"
+		newLeaf := self class new: anRTEntry.
 		left := self class new: self contents.
-		right := self class new: anRTEntry.
+		right := newLeaf.
 		height := 2.
 		contents := nil.
 	]ifFalse: [ | leastEnlargementChild |

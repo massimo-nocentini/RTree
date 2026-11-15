@@ -14,7 +14,8 @@ Class {
 	#name : 'RTreeCollection',
 	#superclass : 'RTAbstractCollection',
 	#instVars : [
-		'root'
+		'root',
+		'outliers'
 	],
 	#category : 'RTree-Collections',
 	#package : 'RTree',
@@ -28,6 +29,13 @@ RTreeCollection >> accept: visitor [
 
 { #category : 'adding' }
 RTreeCollection >> add: anRTEntry [
+	| rectangle |
+	"ask the rectangle before touching the tree: an entry that cannot answer it must not break the tree"
+	rectangle := anRTEntry encompassingRectangle.
+	(self isFiniteRectangle: rectangle) ifFalse: [
+		"a NaN or an infinite rectangle cannot be merged with the others, keep it aside"
+		self outliers add: anRTEntry.
+		^ anRTEntry ].
 	root := root addChild: anRTEntry.
 	^ anRTEntry
 ]
@@ -57,7 +65,8 @@ RTreeCollection >> balanceRemovedPath: path [
 
 { #category : 'enumerating' }
 RTreeCollection >> do: aBlock [
-	root do: aBlock
+	root do: aBlock.
+	outliers ifNotNil: [ outliers do: aBlock ]
 ]
 
 { #category : 'finding/searching' }
@@ -67,6 +76,8 @@ RTreeCollection >> entriesAtPoint: aPoint [
 	"very important to preserv the drawing order"
 	res := OrderedCollection new.
 	root nodesWithPoint: aPoint list: res.
+	outliers ifNotNil: [
+		outliers do: [ :each | each addEntriesIn: res position: aPoint ] ].
 	res := res collect: [ :s | s -> s indexesFromRoot ].
 	self sortResultList: res.
 	^ res collect: [ :assoc | assoc key ]
@@ -77,6 +88,9 @@ RTreeCollection >> entriesAtRectangle: aRectangle [
 	| res |
 	res := OrderedCollection new.
 	root nodesIntersetcsRectangle: aRectangle list: res.
+	outliers ifNotNil: [
+		outliers do: [ :each |
+			(each encompassingRectangle intersects: aRectangle) ifTrue: [ res add: each ] ] ].
 	res sort: [:a :b | a entryIndex < b entryIndex ].
 	^ res
 ]
@@ -99,12 +113,31 @@ RTreeCollection >> isBalanced [
 
 { #category : 'testing' }
 RTreeCollection >> isEmpty [
-	^ root isEmpty
+	^ root isEmpty and: [ outliers isNil or: [ outliers isEmpty ] ]
+]
+
+{ #category : 'testing' }
+RTreeCollection >> isFiniteRectangle: aRectangle [
+	"NaN and infinities break Rectangle>>merge: and the comparisons of the tree.
+	x - x = 0 holds for every finite number and fails for NaN and infinities"
+	| origin corner |
+	origin := aRectangle origin.
+	corner := aRectangle corner.
+	^ origin x - origin x = 0 and: [
+		origin y - origin y = 0 and: [
+		corner x - corner x = 0 and: [
+		corner y - corner y = 0 ] ] ]
 ]
 
 { #category : 'testing' }
 RTreeCollection >> isTotalBalanced [
 	^ root isTotalBalanced
+]
+
+{ #category : 'accessing' }
+RTreeCollection >> outliers [
+	"entries whose rectangle is not finite, they are searched linearly"
+	^ outliers ifNil: [ outliers := OrderedCollection new ]
 ]
 
 { #category : 'shapes - ordering' }
@@ -124,7 +157,10 @@ RTreeCollection >> rectangle [
 
 { #category : 'removing' }
 RTreeCollection >> remove: oldRTEntry ifAbsent: anExceptionBlock [
-	| path |
+	| path index |
+	outliers ifNotNil: [
+		index := outliers identityIndexOf: oldRTEntry.
+		index > 0 ifTrue: [ ^ outliers removeAt: index ] ].
 	path := root searchPath: oldRTEntry.
 	"the search is guided by the current rectangle of the entry. When it changed
 	without the collection being told, the stored leaf is elsewhere: look everywhere"
