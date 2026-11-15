@@ -199,6 +199,13 @@ RTreeCollection >> removeLastNodeInPath: path [
 	self balanceRemovedPath: path
 ]
 
+{ #category : 'removing' }
+RTreeCollection >> removeAll [
+	"Collection>>removeAll removes while it iterates"
+	root := RTNilNode new.
+	outliers := nil
+]
+
 { #category : 'accessing' }
 RTreeCollection >> root [
 	^ root

@@ -32,6 +32,15 @@ RTAbstractCollection >> bulkLoad: aCollectionOfRTEntry [
 	self addAll: aCollectionOfRTEntry
 ]
 
+{ #category : 'enumerating' }
+RTAbstractCollection >> collect: aBlock [
+	"the species cannot hold any object, only entries"
+	| result |
+	result := OrderedCollection new.
+	self do: [ :each | result add: (aBlock value: each) ].
+	^ result
+]
+
 { #category : 'finding/searching' }
 RTAbstractCollection >> entriesAtPoint: position [
 

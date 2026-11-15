@@ -153,3 +153,12 @@ RTreeRegressionTest >> testNaNRectangleDoesNotHideTheOthers [
 	self assert: tree size equals: 128.
 	self assertTight: tree
 ]
+
+{ #category : 'tests - enumerating' }
+RTreeRegressionTest >> testNodeCollect [
+	"RTNode>>collect: ignored its block"
+	| tree |
+	tree := RTreeCollection new.
+	tree addAll: (self randomBoxes: 5 seed: 6).
+	self assert: (tree root collect: [ :each | each model ]) asArray sort equals: #( 1 2 3 4 5 )
+]

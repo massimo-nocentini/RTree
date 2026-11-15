@@ -15,7 +15,7 @@ Class {
 
 { #category : 'adding' }
 RTSequenceableCollection >> add: anRTEntry [
-	entries add: anRTEntry
+	^ entries add: anRTEntry
 ]
 
 { #category : 'enumerating' }
@@ -62,7 +62,12 @@ RTSequenceableCollection >> pushFront: anRTEntry [
 
 { #category : 'removing' }
 RTSequenceableCollection >> remove: anRTEntry ifAbsent: anExceptionBlock [
-	entries remove: anRTEntry ifAbsent: anExceptionBlock
+	^ entries remove: anRTEntry ifAbsent: anExceptionBlock
+]
+
+{ #category : 'removing' }
+RTSequenceableCollection >> removeAll [
+	entries removeAll
 ]
 
 { #category : 'update' }

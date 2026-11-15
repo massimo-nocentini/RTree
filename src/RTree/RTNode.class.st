@@ -86,10 +86,10 @@ RTNode >> childrenDo: aBlock [
 ]
 
 { #category : 'enumerating' }
-RTNode >> collect: aFullBlockClosure [
+RTNode >> collect: aBlock [
 	| list |
 	list := OrderedCollection new.
-	self do: [ :each | list add: each ].
+	self do: [ :each | list add: (aBlock value: each) ].
 	^ list
 ]
 

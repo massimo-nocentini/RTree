@@ -189,3 +189,33 @@ RTCollectionTest >> testCopyIsIndependent [
 	self assert: (entryCollection entriesAtPoint: 5 @ 5) asArray equals: { box1 }.
 	self assert: (copy entriesAtPoint: 205 @ 5) asArray equals: { box3 }
 ]
+
+{ #category : 'tests' }
+RTCollectionTest >> testAddAndRemoveAnswerTheEntry [
+	"RTSequenceableCollection answered itself"
+	| box |
+	box := RTreeBox new size: 10; entryIndex: 1; yourself.
+	self assert: (entryCollection add: box) identicalTo: box.
+	self assert: (entryCollection remove: box) identicalTo: box
+]
+
+{ #category : 'tests' }
+RTCollectionTest >> testCollect [
+	"collect: answered a collection of the receiver's species, which cannot hold any object"
+	| result |
+	1 to: 6 do: [ :i |
+		entryCollection add: (RTreeBox new size: 10; position: (i * 20) @ 0; model: i; entryIndex: i; yourself) ].
+	result := entryCollection collect: [ :each | each model ].
+	self assert: result asArray sort equals: #( 1 2 3 4 5 6 )
+]
+
+{ #category : 'tests' }
+RTCollectionTest >> testRemoveAll [
+	"Collection>>removeAll removes while it iterates"
+	1 to: 8 do: [ :i |
+		entryCollection add: (RTreeBox new size: 10; position: (i * 20) @ 0; entryIndex: i; yourself) ].
+	entryCollection removeAll.
+	self assert: entryCollection isEmpty.
+	self assert: entryCollection size equals: 0.
+	self assert: (entryCollection entriesAtPoint: 25 @ 5) isEmpty
+]
