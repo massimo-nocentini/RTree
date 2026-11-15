@@ -13,7 +13,7 @@ remove: and updateEntry: walk up from the leaf, they neither search the tree nor
 
 updateEntry: changes the leaf in place when the entry stays near. Otherwise it only records the entry in `pending`: the tree keeps
 its previous rectangle until the next query, which applies the pending updates first (see applyPendingUpdates). When many entries
-moved, as after a layout, the whole tree is built again at once, in Sort-Tile-Recursive order, like bulkLoad:.
+moved, as after a layout, the whole tree is built again at once, in Hilbert order, like bulkLoad:.
 
 Use the inspector to visualize the RTree
 "
@@ -67,7 +67,7 @@ RTreeCollection >> bounds [
 { #category : 'adding' }
 RTreeCollection >> bulkLoad: aCollectionOfRTEntry [
 	"RSCanvas>>shapeCollection: (useRTree) gives the existing shapes here. An empty tree is
-	built at once from the entries in Sort-Tile-Recursive order, halved recursively:
+	built at once from the entries in the order of a Hilbert curve, halved recursively:
 	a balanced tree of nearby entries, in O(n log n) without any insertion"
 	| seen entries |
 	self isEmpty ifFalse: [ ^ super bulkLoad: aCollectionOfRTEntry ].
@@ -85,14 +85,98 @@ RTreeCollection >> bulkLoad: aCollectionOfRTEntry [
 
 { #category : 'private - adding' }
 RTreeCollection >> buildTreeFrom: aCollectionOfRTEntry [
-	"a balanced tree of the entries, whose rectangles are finite, in Sort-Tile-Recursive order"
-	root := RTNode fromEntries: (self sortTileRecursive: aCollectionOfRTEntry) from: 1 to: aCollectionOfRTEntry size.
+	"a balanced tree of the entries, whose rectangles are finite, in Hilbert order"
+	root := RTNode fromEntries: (self hilbertOrder: aCollectionOfRTEntry) from: 1 to: aCollectionOfRTEntry size.
 	self rebuildLeaves
 ]
 
 { #category : 'private - adding' }
+RTreeCollection >> hilbertOrder: aCollection [
+	"The entries sorted by the Hilbert index of their center, on a curve over the rectangle of
+	the centers: the halves of the sequence, then their halves, are compact groups of nearby
+	entries, close to squares. The order of the curve gives about 16 cells per entry (at most
+	order 16). Each index is packed with the position of its entry in one integer, sorted by a
+	radix sort: three Arrays, as few as the large ones of a sort by blocks"
+	| entries count minX minY maxX maxY width height order last positionBits mask codes spare |
+	entries := aCollection asArray.
+	count := entries size.
+	minX := minY := Float infinity.
+	maxX := maxY := Float negativeInfinity.
+	entries do: [ :each | | rectangle x y |
+		rectangle := each encompassingRectangle.
+		x := rectangle origin x * 0.5 + (rectangle corner x * 0.5).
+		y := rectangle origin y * 0.5 + (rectangle corner y * 0.5).
+		minX := minX min: x.
+		minY := minY min: y.
+		maxX := maxX max: x.
+		maxY := maxY max: y ].
+	width := maxX - minX.
+	height := maxY - minY.
+	"centers spread over more than the largest Float"
+	(self isFiniteRectangle: (0 @ 0 corner: width @ height)) ifFalse: [ ^ self sortTileRecursive: entries ].
+	width = 0 ifTrue: [ width := 1 ].
+	height = 0 ifTrue: [ height := 1 ].
+	order := (count highBit + 1) // 2 + 2 min: 16.
+	last := (1 bitShift: order) - 1.
+	positionBits := count highBit.
+	mask := (1 bitShift: positionBits) - 1.
+	codes := Array new: count.
+	entries doWithIndex: [ :each :i | | rectangle |
+		rectangle := each encompassingRectangle.
+		codes at: i put: (((self
+			hilbertX: (rectangle origin x * 0.5 + (rectangle corner x * 0.5) - minX / width * last) floor
+			y: (rectangle origin y * 0.5 + (rectangle corner y * 0.5) - minY / height * last) floor
+			order: order)
+				bitShift: positionBits) bitOr: i - 1) ].
+	spare := Array new: count.
+	"a stable least significant digit radix sort on the 2 * order bits of the index, 11 bits per pass"
+	(0 to: 2 * order - 1 by: 11) do: [ :shift | | counts swap digitShift |
+		digitShift := (positionBits + shift) negated.
+		counts := Array new: 2049 withAll: 0.
+		codes do: [ :code | | digit |
+			digit := ((code bitShift: digitShift) bitAnd: 2047) + 2.
+			counts at: digit put: (counts at: digit) + 1 ].
+		2 to: 2049 do: [ :i | counts at: i put: (counts at: i) + (counts at: i - 1) ].
+		codes do: [ :code | | digit position |
+			digit := ((code bitShift: digitShift) bitAnd: 2047) + 1.
+			position := (counts at: digit) + 1.
+			counts at: digit put: position.
+			spare at: position put: code ].
+		swap := codes.
+		codes := spare.
+		spare := swap ].
+	1 to: count do: [ :i | spare at: i put: (entries at: ((codes at: i) bitAnd: mask) + 1) ].
+	^ spare
+]
+
+{ #category : 'private - adding' }
+RTreeCollection >> hilbertX: xIn y: yIn order: anInteger [
+	"the index of (x, y), two integers from 0 to 2^anInteger - 1, on the Hilbert curve of that order"
+	| x y last index side rx ry swap |
+	x := xIn.
+	y := yIn.
+	last := (1 bitShift: anInteger) - 1.
+	index := 0.
+	side := 1 bitShift: anInteger - 1.
+	[ side > 0 ] whileTrue: [
+		rx := (x bitAnd: side) > 0 ifTrue: [ 1 ] ifFalse: [ 0 ].
+		ry := (y bitAnd: side) > 0 ifTrue: [ 1 ] ifFalse: [ 0 ].
+		index := index + (side * side * ((3 * rx) bitXor: ry)).
+		ry = 0 ifTrue: [
+			rx = 1 ifTrue: [
+				x := last - x.
+				y := last - y ].
+			swap := x.
+			x := y.
+			y := swap ].
+		side := side bitShift: -1 ].
+	^ index
+]
+
+{ #category : 'private - adding' }
 RTreeCollection >> sortTileRecursive: aCollection [
-	"the entries sorted by the x of their center into about sqrt(n) vertical slices, each slice sorted by y"
+	"the entries sorted by the x of their center into about sqrt(n) vertical slices, each slice
+	sorted by y. Used by hilbertOrder: when the centers are too far apart for a Hilbert curve"
 	| items sliceSize sorted index |
 	items := (aCollection collect: [ :each | | r |
 		r := each encompassingRectangle.
@@ -130,7 +214,7 @@ RTreeCollection >> applyPendingUpdates [
 	"The entries in pending moved without the tree knowing their new rectangle: it holds them
 	with their previous one, and every node contains them. Called before every query.
 	When more than 1/8 of the entries moved (a layout moves all of them), the tree is built again
-	at once in Sort-Tile-Recursive order, which also makes it tight and balanced. Otherwise each
+	at once in Hilbert order, which also makes it tight and balanced. Otherwise each
 	entry is updated in place or removed and added again"
 	| entries |
 	(pending isNil or: [ pending isEmpty ]) ifTrue: [ ^ self ].

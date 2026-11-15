@@ -436,7 +436,7 @@ RTreeRegressionTest >> testEntriesAtPointOfLongEntries [
 { #category : 'tests - adding' }
 RTreeRegressionTest >> testBulkLoad [
 	"bulkLoad: (used by useRTree) built the tree by repeated add:. It now builds a
-	balanced tree in Sort-Tile-Recursive order that accepts later changes"
+	balanced tree of nearby entries that accepts later changes"
 	| tree list boxes nan random |
 	boxes := self randomBoxes: 1000 seed: 25.
 	nan := self boxAt: Float nan @ 0 extent: 10 @ 10 index: 1001.
@@ -575,5 +575,37 @@ RTreeRegressionTest >> testLargeSparseResultsAreOrdered [
 		self
 			assert: result asArray
 			equals: (result asArray sort: [ :a :b | a entryIndex <= b entryIndex ]) ]
+]
+
+{ #category : 'tests - removing' }
+RTreeRegressionTest >> testBulkLoadOfEntriesTooFarApartForAHilbertCurve [
+	"the centers span more than the largest Float: bulkLoad: sorts them in Sort-Tile-Recursive order"
+	| tree list boxes |
+	boxes := (1 to: 300) collect: [ :i |
+		self boxAt: ((i odd ifTrue: [ 1.5e308 ] ifFalse: [ -1.5e308 ]) / 300 * i) @ (i * 10) extent: 10 @ 10 index: i ].
+	tree := RTreeCollection new.
+	tree bulkLoad: boxes.
+	list := RTSequenceableCollection new.
+	list addAll: boxes.
+	self assert: tree size equals: 300.
+	self assert: tree height <= 10.
+	self assertTight: tree.
+	boxes do: [ :each |
+		self
+			assert: (tree entriesAtPoint: each position + (5 @ 5)) asArray
+			equals: (list entriesAtPoint: each position + (5 @ 5)) asArray ]
+]
+
+{ #category : 'tests - removing' }
+RTreeRegressionTest >> testBulkLoadKeepsNearbyEntriesTogether [
+	"the bulk load follows a Hilbert curve: in a grid of 64 x 64 boxes, the four leaves under each
+	node of height 3 are a square of 2 x 2 boxes"
+	| tree boxes squares |
+	boxes := (0 to: 4095) collect: [ :i | self boxAt: (i \\ 64 * 20) @ (i // 64 * 20) extent: 10 @ 10 index: i + 1 ].
+	tree := RTreeCollection new.
+	tree bulkLoad: (boxes asArray shuffleBy: (Random seed: 31)).
+	squares := tree root withAllChildren select: [ :node | node height = 3 ].
+	self assert: squares size equals: 1024.
+	self assert: (squares allSatisfy: [ :node | node rectangle extent = (30 @ 30) ])
 ]
 
