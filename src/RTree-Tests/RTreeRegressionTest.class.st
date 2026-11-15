@@ -210,3 +210,20 @@ RTreeRegressionTest >> testEntriesOnTheBorderOfTheirRectangle [
 				assert: (tree entriesAtPoint: p) asArray
 				equals: (list entriesAtPoint: p) asArray ] ]
 ]
+
+{ #category : 'tests - adding' }
+RTreeRegressionTest >> testInsertionAllocatesLittle [
+	"Every level of an insertion created about 1 KB of Arrays, closures, Points and Rectangles"
+	| tree boxes before bytes |
+	tree := RTreeCollection new.
+	boxes := self randomBoxes: 3000 seed: 12.
+	boxes do: [ :each | each encompassingRectangle ].
+	tree addAll: (boxes first: 2000).
+	Smalltalk garbageCollect.
+	before := Smalltalk vm parameterAt: 34.
+	(boxes last: 1000) do: [ :each | tree add: each ].
+	bytes := ((Smalltalk vm parameterAt: 34) - before) / 1000.
+	"v1.01: about 15 KB per entry at this size"
+	self assert: bytes < 4000.
+	self assertTight: tree
+]

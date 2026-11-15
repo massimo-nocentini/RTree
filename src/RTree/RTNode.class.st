@@ -38,13 +38,16 @@ RTNode >> add: anRTEntry path: list [
 		right := newLeaf.
 		height := 2.
 		contents := nil.
+		rectangle := left rectangle merge: right rectangle
 	]ifFalse: [ | leastEnlargementChild |
 		leastEnlargementChild := self leastEnlargementChild: anRTEntry.
-		list add: (right = leastEnlargementChild) -> leastEnlargementChild.
+		list add: (right == leastEnlargementChild) -> leastEnlargementChild.
 		leastEnlargementChild add: anRTEntry path: list.
 		height := (left height max: right height) + 1.
-	].
-	rectangle := Rectangle merging: {left rectangle. right rectangle}
+		"the child grew by the rectangle of the entry. quickMerge: answers the receiver
+		when it contains it already, so most levels create no rectangle"
+		rectangle := rectangle quickMerge: anRTEntry encompassingRectangle
+	]
 ]
 
 { #category : 'adding' }
@@ -103,8 +106,15 @@ RTNode >> computeHeight [
 ]
 
 { #category : 'public' }
+RTNode >> areaOf: aRectangle mergedWith: anotherRectangle [
+	"the area of aRectangle merge: anotherRectangle, without creating it"
+	^ ((aRectangle corner x max: anotherRectangle corner x) - (aRectangle origin x min: anotherRectangle origin x))
+		* ((aRectangle corner y max: anotherRectangle corner y) - (aRectangle origin y min: anotherRectangle origin y))
+]
+
+{ #category : 'public' }
 RTNode >> computeRectangle [
-	rectangle := Rectangle merging: { left rectangle. right rectangle }.
+	rectangle := left rectangle merge: right rectangle.
 	height := (left height max: right height) + 1
 ]
 
@@ -212,16 +222,14 @@ RTNode >> isTotalBalanced [
 
 { #category : 'private' }
 RTNode >> leastEnlargementChild: anRTEntry [
-	| minRectangleEnlargement rect leftRect rightRect leftDiff rightDiff area1 area2 |
-	"TODO you can enhance the logic of this method"
-	minRectangleEnlargement := nil.
+	| rect leftDiff rightDiff area1 area2 |
+	"TODO you can enhance the logic of this method.
+	This is called at every level of an insertion: the areas are computed without creating rectangles"
 	rect := anRTEntry encompassingRectangle.
-	leftRect := Rectangle merging: {left rectangle. rect }.
-	rightRect := Rectangle merging: {right rectangle. rect }.
 	area1 := left rectangle area.
 	area2 := right rectangle area.
-	leftDiff := leftRect area - area1.
-	rightDiff := rightRect area - area2.
+	leftDiff := (self areaOf: left rectangle mergedWith: rect) - area1.
+	rightDiff := (self areaOf: right rectangle mergedWith: rect) - area2.
 	^ rightDiff = leftDiff
 		ifTrue: [ area1 < area2
 				ifTrue: [ left ]
