@@ -326,10 +326,38 @@ RTreeCollection >> sortResultList: aCollection [
 
 { #category : 'update' }
 RTreeCollection >> updateEntry: anRTEntry [
-
-	self remove: anRTEntry.
+	"The rectangle of the entry changed. When the new rectangle stays inside the parent or the
+	grandparent of its leaf, as for most moves of a drag or an animation, the leaf is updated in
+	place and its ancestors are recomputed upwards. Otherwise the entry is removed and added again"
+	| leaf path rectangle |
+	leaf := self leaves at: anRTEntry ifAbsent: [ nil ].
 	anRTEntry resetEncompassingRectangle.
-	self add: anRTEntry
+	leaf ifNil: [
+		self remove: anRTEntry.
+		^ self add: anRTEntry ].
+	rectangle := anRTEntry encompassingRectangle.
+	path := self pathTo: leaf.
+	((self isFiniteRectangle: rectangle) and: [ self canUpdateIn: path rectangle: rectangle ])
+		ifFalse: [
+			self remove: anRTEntry.
+			^ self add: anRTEntry ].
+	leaf rectangle: rectangle.
+	(path size - 1 to: 1 by: -1) do: [ :index | | node old |
+		node := (path at: index) value.
+		old := node rectangle.
+		node computeRectangle.
+		"the ancestors of an unchanged node do not change"
+		node rectangle = old ifTrue: [ ^ self ] ]
+]
+
+{ #category : 'private - update' }
+RTreeCollection >> canUpdateIn: path rectangle: aRectangle [
+	"the parent or the grandparent of the leaf (the last of path) contains aRectangle,
+	or the leaf is the root"
+	path isEmpty ifTrue: [ ^ false ].
+	path size = 1 ifTrue: [ ^ true ].
+	^ ((path at: path size - 1) value rectangle containsRect: aRectangle)
+		or: [ path size > 2 and: [ (path at: path size - 2) value rectangle containsRect: aRectangle ] ]
 ]
 
 { #category : 'update' }

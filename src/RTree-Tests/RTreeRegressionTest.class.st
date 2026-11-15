@@ -349,3 +349,28 @@ RTreeRegressionTest >> testSubclassThatSetsTheRoot [
 	self assert: tree size equals: 49.
 	self assertTight: tree
 ]
+
+{ #category : 'tests - update' }
+RTreeRegressionTest >> testSmallMovesUpdateInPlace [
+	"Every updateEntry: removed and added the entry again"
+	| tree list boxes random inPlace |
+	tree := RTreeCollection new.
+	list := RTSequenceableCollection new.
+	boxes := self randomBoxes: 500 seed: 19.
+	boxes do: [ :each | tree add: each. list add: each ].
+	random := Random seed: 20.
+	inPlace := 0.
+	3000 timesRepeat: [ | box leaf |
+		box := boxes at: (random next * boxes size) floor + 1.
+		leaf := tree leaves at: box.
+		box position: box position + (((random next * 6) - 3) @ ((random next * 6) - 3)).
+		tree updateEntry: box.
+		list updateEntry: box.
+		(tree leaves at: box) == leaf ifTrue: [ inPlace := inPlace + 1 ] ].
+	self assert: inPlace > 1500.
+	self assertTight: tree.
+	self assert: tree size equals: 500.
+	0 to: 1000 by: 37 do: [ :x |
+		0 to: 1000 by: 41 do: [ :y |
+			self assert: (tree entriesAtPoint: x @ y) asArray equals: (list entriesAtPoint: x @ y) asArray ] ]
+]
