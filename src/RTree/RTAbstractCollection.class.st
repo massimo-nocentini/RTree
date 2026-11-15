@@ -15,6 +15,11 @@ Class {
 	#tag : 'Collections'
 }
 
+{ #category : 'testing' }
+RTAbstractCollection class >> isAbstract [
+	^ self == RTAbstractCollection
+]
+
 { #category : 'examples' }
 RTAbstractCollection class >> exampleList [
 	"in the inspector add and remove shapes"

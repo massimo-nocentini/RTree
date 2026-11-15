@@ -11,9 +11,12 @@ Class {
 
 { #category : 'building suites' }
 RTCollectionTest class >> testParameters [
+	"every concrete collection of the RTree package"
 	| m classesToConsider |
 	m := ParametrizedTestMatrix new.
-	classesToConsider := RTAbstractCollection subclasses.
+	classesToConsider := (RTAbstractCollection allSubclasses select: [ :each |
+		each isAbstract not and: [ each package == RTAbstractCollection package ] ])
+			asSortedCollection: [ :a :b | a name <= b name ].
 	classesToConsider do: [ :cls |
 		m addCase: { (#entryCollectionClass: -> cls) }
 	].
