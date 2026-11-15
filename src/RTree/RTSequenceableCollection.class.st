@@ -38,10 +38,21 @@ RTSequenceableCollection >> entriesAtRectangle: aRectangle [
 	^ entries select: [ :each | each encompassingRectangle intersects: aRectangle ]
 ]
 
+{ #category : 'testing' }
+RTSequenceableCollection >> includes: anObject [
+	"the entries are a Bag, they match with ="
+	^ entries includes: anObject
+]
+
 { #category : 'initialization' }
 RTSequenceableCollection >> initialize [
 	super initialize.
 	entries := OrderedCollection new
+]
+
+{ #category : 'testing' }
+RTSequenceableCollection >> isEmpty [
+	^ entries isEmpty
 ]
 
 { #category : 'copying' }
@@ -78,4 +89,10 @@ RTSequenceableCollection >> updateEntry: anRTEntry [
 { #category : 'update' }
 RTSequenceableCollection >> updateEntry: anRTEntry before: anotherRTEntry [
 	entries remove: anRTEntry; add: anRTEntry before: anotherRTEntry
+]
+
+{ #category : 'accessing' }
+RTSequenceableCollection >> size [
+	"Collection>>size counts the entries with do:"
+	^ entries size
 ]

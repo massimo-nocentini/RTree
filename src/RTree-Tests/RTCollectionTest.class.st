@@ -219,3 +219,22 @@ RTCollectionTest >> testRemoveAll [
 	self assert: entryCollection size equals: 0.
 	self assert: (entryCollection entriesAtPoint: 25 @ 5) isEmpty
 ]
+
+{ #category : 'tests' }
+RTCollectionTest >> testSizeAndIncludes [
+	| boxes |
+	boxes := (1 to: 5) collect: [ :i |
+		RTreeBox new size: 10; position: (i * 20) @ 0; entryIndex: i; yourself ].
+	self assert: entryCollection size equals: 0.
+	self deny: (entryCollection includes: boxes first).
+	entryCollection addAll: boxes.
+	self assert: entryCollection size equals: 5.
+	self deny: entryCollection isEmpty.
+	self assert: (boxes allSatisfy: [ :each | entryCollection includes: each ]).
+	self deny: (entryCollection includes: RTreeBox new).
+	entryCollection remove: boxes second.
+	self assert: entryCollection size equals: 4.
+	self deny: (entryCollection includes: boxes second).
+	entryCollection removeAll.
+	self assert: entryCollection isEmpty
+]
