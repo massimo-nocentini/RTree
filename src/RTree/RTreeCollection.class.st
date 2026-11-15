@@ -42,24 +42,23 @@ RTreeCollection >> add: anRTEntry [
 
 { #category : 'private - removing' }
 RTreeCollection >> balanceRemovedPath: path [
-
+	"AVL deletion: walk up from the removed leaf, recompute each ancestor and rotate the
+	unbalanced ones with the rotations of the insertion. No entry is inserted again"
 	(1 to: path size -2) reverseDo: [ :index | | tree |
 		tree := (path at: index) value.
 		"the removed entry may define the border of every ancestor: recompute the rectangle, not only the height"
 		tree computeRectangle.
-		tree isBalanced ifFalse: [ | toMove brother |
-			tree left height < tree right height ifTrue: [
-				toMove := tree left.
-				brother := tree right.
-			] ifFalse: [
-				toMove := tree right.
-				brother := tree left ].
-			tree fromNode: brother.
-			toMove do: [ :shape | tree addChild: shape ].
-			"this means that when you remove a node,
-			 in order to keep it balanced
-			maybe you can move a lot of nodes"
-		].
+		tree isBalanced ifFalse: [ | y x |
+			"y is the taller child, x the taller child of y; on a tie x is on the side of y (single rotation)"
+			y := tree left height < tree right height
+				ifTrue: [ true -> tree right ]
+				ifFalse: [ false -> tree left ].
+			x := y value left height = y value right height
+				ifTrue: [ y key -> (y key ifTrue: [ y value right ] ifFalse: [ y value left ]) ]
+				ifFalse: [ y value left height < y value right height
+					ifTrue: [ true -> y value right ]
+					ifFalse: [ false -> y value left ] ].
+			tree balanceZ: nil -> tree y: y x: x ].
 	]
 ]
 

@@ -227,3 +227,39 @@ RTreeRegressionTest >> testInsertionAllocatesLittle [
 	self assert: bytes < 4000.
 	self assertTight: tree
 ]
+
+{ #category : 'tests - removing' }
+RTreeRegressionTest >> testRemoveDoesNotReinsert [
+	"Rebalancing after a removal inserted a whole subtree again, entry by entry.
+	With rotations, at most the sibling of the removed leaf moves to another node"
+	| tree boxes random |
+	tree := RTreeCollection new.
+	boxes := self randomBoxes: 2000 seed: 13.
+	tree addAll: boxes.
+	random := Random seed: 14.
+	((boxes copy shuffleBy: random) first: 1500) do: [ :each | | before moved |
+		before := IdentityDictionary new.
+		(tree root withAllChildren select: [ :node | node isLeaf ]) do: [ :leaf | before at: leaf contents put: leaf ].
+		tree remove: each.
+		moved := (tree root withAllChildren select: [ :node | node isLeaf ])
+			count: [ :leaf | (before at: leaf contents) ~~ leaf ].
+		self assert: moved <= 1 ].
+	self assert: tree size equals: 500.
+	self assertTight: tree
+]
+
+{ #category : 'tests - removing' }
+RTreeRegressionTest >> testRemoveKeepsAVLBalance [
+	"The rotation based deletion keeps every node balanced, its height and its rectangle right"
+	| tree boxes random |
+	random := Random seed: 15.
+	#( 7 64 513 ) do: [ :count |
+		tree := RTreeCollection new.
+		boxes := self randomBoxes: count seed: count.
+		tree addAll: boxes.
+		(boxes copy shuffleBy: random) doWithIndex: [ :each :i |
+			tree remove: each.
+			self assert: tree size equals: count - i.
+			i \\ 16 = 0 ifTrue: [ self assertTight: tree ] ].
+		self assert: tree isEmpty ]
+]
