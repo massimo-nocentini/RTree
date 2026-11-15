@@ -126,6 +126,9 @@ RTreeCollection >> rectangle [
 RTreeCollection >> remove: oldRTEntry ifAbsent: anExceptionBlock [
 	| path |
 	path := root searchPath: oldRTEntry.
+	"the search is guided by the current rectangle of the entry. When it changed
+	without the collection being told, the stored leaf is elsewhere: look everywhere"
+	path ifEmpty: [ path := root searchPathIgnoringBounds: oldRTEntry ].
 	path ifEmpty: [ ^ anExceptionBlock value ].
 	path size = 1 ifTrue: [
 		root := RTNilNode new.

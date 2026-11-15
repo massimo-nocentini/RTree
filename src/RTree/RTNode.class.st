@@ -339,7 +339,8 @@ RTNode >> searchPath: anEntry [
 
 { #category : 'finding/searching' }
 RTNode >> searchPath: anRTEntry rectangle: entryRectangle in: path dir: aBoolean [
-	(self rectangle containsRect: entryRectangle)
+	"a nil entryRectangle visits every node"
+	(entryRectangle isNil or: [ self rectangle containsRect: entryRectangle ])
 		ifFalse: [ ^ self ].
 	self isLeaf ifTrue: [
 		contents == anRTEntry ifTrue: [
@@ -351,6 +352,15 @@ RTNode >> searchPath: anRTEntry rectangle: entryRectangle in: path dir: aBoolean
 		right searchPath: anRTEntry rectangle: entryRectangle in: path dir: true.
 		path ifNotEmpty: [ path addFirst: aBoolean -> self. ].
 	 ]
+]
+
+{ #category : 'finding/searching' }
+RTNode >> searchPathIgnoringBounds: anEntry [
+	"same as searchPath: but it does not use the rectangle of anEntry, O(n)"
+	| path |
+	path := OrderedCollection new.
+	self searchPath: anEntry rectangle: nil in: path dir: nil.
+	^ path
 ]
 
 { #category : 'accessing - children' }

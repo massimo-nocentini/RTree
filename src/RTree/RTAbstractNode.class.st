@@ -70,6 +70,11 @@ RTAbstractNode >> searchPath: anObject [
 	^ #()
 ]
 
+{ #category : 'finding/searching' }
+RTAbstractNode >> searchPathIgnoringBounds: anObject [
+	^ #()
+]
+
 { #category : 'accessing - children' }
 RTAbstractNode >> withAllChildren [
 	^ #()

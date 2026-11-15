@@ -68,3 +68,36 @@ RTreeRegressionTest >> testRemoveShrinksAncestorRectangles [
 	self assert: tree rectangle equals: ((301 @ 452) corner: (949 @ 890)).
 	self assertTight: tree
 ]
+
+{ #category : 'tests - update' }
+RTreeRegressionTest >> testRemoveAfterTheRectangleChangedSilently [
+	"remove: searched the leaf with the current rectangle of the entry"
+	| tree boxes box |
+	tree := RTreeCollection new.
+	boxes := self randomBoxes: 32 seed: 2.
+	tree addAll: boxes.
+	box := boxes at: 7.
+	box position: 900 @ 50; resetEncompassingRectangle.
+	self assert: (tree remove: box) identicalTo: box.
+	self assert: tree size equals: 31.
+	self deny: (tree includes: box)
+]
+
+{ #category : 'tests - update' }
+RTreeRegressionTest >> testUpdateAfterTheRectangleChangedSilently [
+	"The entry was moved and its cached rectangle reset before updateEntry:, as RSBitmap>>form: did"
+	| tree boxes box |
+	tree := RTreeCollection new.
+	boxes := self randomBoxes: 32 seed: 2.
+	tree addAll: boxes.
+	box := boxes at: 5.
+	box position: 900 @ 50; resetEncompassingRectangle.
+	tree updateEntry: box.
+	self assert: (tree entriesAtPoint: 905 @ 55) asArray equals: { box }.
+	box := boxes at: 9.
+	box extent: 100 @ 100; resetEncompassingRectangle.
+	tree updateEntry: box.
+	self assert: ((tree entriesAtPoint: box position + (95 @ 95)) includes: box).
+	self assert: tree size equals: 32.
+	self assertTight: tree
+]
