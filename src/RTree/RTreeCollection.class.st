@@ -47,6 +47,16 @@ RTreeCollection >> add: anRTEntry [
 	^ anRTEntry
 ]
 
+{ #category : 'accessing' }
+RTreeCollection >> bounds [
+	"the rectangle of the root is the union of the entries in the tree, see RTAbstractCollection>>bounds"
+	| bounds |
+	bounds := root isEmpty ifTrue: [ nil ] ifFalse: [ root rectangle ].
+	outliers ifNotNil: [
+		outliers do: [ :each | bounds := self mergeBounds: bounds with: each encompassingRectangle ] ].
+	^ bounds
+]
+
 { #category : 'adding' }
 RTreeCollection >> bulkLoad: aCollectionOfRTEntry [
 	"RSCanvas>>shapeCollection: (useRTree) gives the existing shapes here. An empty tree is

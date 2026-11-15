@@ -328,3 +328,46 @@ RTCollectionTest >> testEntryAtPointSatisfyingIfNone [
 	self assert: (entryCollection entryAtPoint: 50 @ 5 satisfying: [ :each | true ] ifNone: [ #none ]) equals: #none
 ]
 
+{ #category : 'tests' }
+RTCollectionTest >> testBounds [
+	| boxes union |
+	self assert: entryCollection bounds isNil.
+	boxes := (1 to: 200) collect: [ :i |
+		RTreeBox new
+			position: ((i * 37 \\ 101) - 50) @ (i * 53 \\ 97);
+			extent: (i \\ 7 + 1) @ (i \\ 5 + 2);
+			entryIndex: i;
+			yourself ].
+	union := [ :entries | Rectangle merging: (entries collect: [ :each | each encompassingRectangle ]) ].
+	entryCollection add: boxes first.
+	self assert: entryCollection bounds equals: boxes first encompassingRectangle.
+	entryCollection addAll: boxes allButFirst.
+	self assert: entryCollection bounds equals: (union value: boxes).
+	"removing the entries on the border shrinks the bounds"
+	(boxes select: [ :each | each position x < -40 or: [ each position y > 90 ] ])
+		do: [ :each | entryCollection remove: each ].
+	self assert: entryCollection bounds equals: (union value: entryCollection asArray).
+	boxes first
+		position: 1000 @ -1000;
+		resetEncompassingRectangle.
+	entryCollection updateEntry: boxes first.
+	self assert: entryCollection bounds equals: (union value: entryCollection asArray).
+	entryCollection removeAll.
+	self assert: entryCollection bounds isNil
+]
+
+{ #category : 'tests' }
+RTCollectionTest >> testBoundsOfEntriesThatAreNotFinite [
+	| box infinite nan bounds |
+	box := RTreeBox new size: 10; entryIndex: 1; yourself.
+	infinite := RTreeBox new position: 5 @ 5; extent: Float infinity @ 1; entryIndex: 2; yourself.
+	nan := RTreeBox new position: Float nan @ 5; extent: 1 @ 1; entryIndex: 3; yourself.
+	entryCollection add: box; add: infinite.
+	self assert: entryCollection bounds equals: (0 @ 0 corner: Float infinity @ 10).
+	entryCollection add: nan.
+	bounds := entryCollection bounds.
+	self assert: bounds origin x isNaN.
+	self deny: ((-1000 @ -1000 corner: 1000 @ 1000) containsRect: bounds).
+	entryCollection remove: nan; remove: infinite.
+	self assert: entryCollection bounds equals: box encompassingRectangle
+]

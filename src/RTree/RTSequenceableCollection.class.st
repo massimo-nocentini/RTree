@@ -6,7 +6,8 @@ Class {
 	#name : 'RTSequenceableCollection',
 	#superclass : 'RTAbstractCollection',
 	#instVars : [
-		'entries'
+		'entries',
+		'bounds'
 	],
 	#category : 'RTree-Collections',
 	#package : 'RTree',
@@ -15,7 +16,15 @@ Class {
 
 { #category : 'adding' }
 RTSequenceableCollection >> add: anRTEntry [
-	^ entries add: anRTEntry
+	entries add: anRTEntry.
+	bounds ifNotNil: [ bounds := self mergeBounds: bounds with: anRTEntry encompassingRectangle ].
+	^ anRTEntry
+]
+
+{ #category : 'accessing' }
+RTSequenceableCollection >> bounds [
+	"computed by scanning the entries, then kept until an entry is removed or updated"
+	^ bounds ifNil: [ bounds := super bounds ]
 ]
 
 { #category : 'enumerating' }
@@ -82,16 +91,19 @@ RTSequenceableCollection >> pushFront: anRTEntry [
 
 { #category : 'removing' }
 RTSequenceableCollection >> remove: anRTEntry ifAbsent: anExceptionBlock [
+	bounds := nil.
 	^ entries remove: anRTEntry ifAbsent: anExceptionBlock
 ]
 
 { #category : 'removing' }
 RTSequenceableCollection >> removeAll [
+	bounds := nil.
 	entries removeAll
 ]
 
 { #category : 'update' }
 RTSequenceableCollection >> updateEntry: anRTEntry [
+	bounds := nil.
 	anRTEntry resetEncompassingRectangle
 ]
 

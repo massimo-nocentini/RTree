@@ -27,6 +27,33 @@ RTAbstractCollection class >> exampleRTree [
 	^ StInspectorPresenter openOn: RTreeCollection new
 ]
 
+{ #category : 'accessing' }
+RTAbstractCollection >> bounds [
+	"The smallest rectangle that contains the rectangle of every entry, nil when the collection is
+	empty. A renderer whose window contains it can draw every entry without a query.
+	A NaN coordinate of an entry makes that coordinate NaN: then the bounds contain nothing"
+	| empty left top right bottom |
+	empty := true.
+	self do: [ :each | | rectangle origin corner |
+		rectangle := each encompassingRectangle.
+		origin := rectangle origin.
+		corner := rectangle corner.
+		empty
+			ifTrue: [
+				empty := false.
+				left := origin x.
+				top := origin y.
+				right := corner x.
+				bottom := corner y ]
+			ifFalse: [
+				left := self minimum: left with: origin x.
+				top := self minimum: top with: origin y.
+				right := self maximum: right with: corner x.
+				bottom := self maximum: bottom with: corner y ] ].
+	empty ifTrue: [ ^ nil ].
+	^ (left @ top) corner: (right @ bottom)
+]
+
 { #category : 'adding' }
 RTAbstractCollection >> bulkLoad: aCollectionOfRTEntry [
 	self addAll: aCollectionOfRTEntry
@@ -116,4 +143,30 @@ RTAbstractCollection >> updateEntry: anRTEntry [
 { #category : 'update' }
 RTAbstractCollection >> updateEntry: anRTEntry before: anotherRTEntry [
 	self subclassResponsibility
+]
+
+{ #category : 'private' }
+RTAbstractCollection >> mergeBounds: aRectangleOrNil with: aRectangle [
+	"as Rectangle>>merge:, but a NaN coordinate wins: min: and max: would keep it or not
+	depending on the order of the arguments"
+	| origin corner |
+	aRectangleOrNil ifNil: [ ^ aRectangle ].
+	origin := aRectangleOrNil origin.
+	corner := aRectangleOrNil corner.
+	^ ((self minimum: origin x with: aRectangle origin x) @ (self minimum: origin y with: aRectangle origin y))
+		corner: ((self maximum: corner x with: aRectangle corner x) @ (self maximum: corner y with: aRectangle corner y))
+]
+
+{ #category : 'private' }
+RTAbstractCollection >> maximum: aNumber with: anotherNumber [
+	aNumber isNaN ifTrue: [ ^ aNumber ].
+	anotherNumber isNaN ifTrue: [ ^ anotherNumber ].
+	^ aNumber max: anotherNumber
+]
+
+{ #category : 'private' }
+RTAbstractCollection >> minimum: aNumber with: anotherNumber [
+	aNumber isNaN ifTrue: [ ^ aNumber ].
+	anotherNumber isNaN ifTrue: [ ^ anotherNumber ].
+	^ aNumber min: anotherNumber
 ]
