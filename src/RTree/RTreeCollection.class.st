@@ -140,6 +140,14 @@ RTreeCollection >> outliers [
 	^ outliers ifNil: [ outliers := OrderedCollection new ]
 ]
 
+{ #category : 'copying' }
+RTreeCollection >> postCopy [
+	"the nodes are copied, the entries are shared"
+	super postCopy.
+	root := root copy.
+	outliers := outliers copy
+]
+
 { #category : 'shapes - ordering' }
 RTreeCollection >> pushBack: anRTEntry [
 	"no need it, but the entry should update its entryIndex"

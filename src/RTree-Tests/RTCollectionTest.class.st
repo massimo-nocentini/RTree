@@ -169,3 +169,23 @@ RTCollectionTest >> testSortResultArray [
 			b.
 			a }
 ]
+
+{ #category : 'tests' }
+RTCollectionTest >> testCopyIsIndependent [
+	"copy shared the nodes (or the OrderedCollection) with the original"
+	| box1 box2 box3 copy |
+	box1 := RTreeBox new size: 10; position: 0 @ 0; entryIndex: 1; yourself.
+	box2 := RTreeBox new size: 10; position: 100 @ 100; entryIndex: 2; yourself.
+	box3 := RTreeBox new size: 10; position: 200 @ 0; entryIndex: 3; yourself.
+	entryCollection add: box1; add: box2.
+	copy := entryCollection copy.
+	copy add: box3.
+	self assert: entryCollection size equals: 2.
+	self assert: copy size equals: 3.
+	self assert: (entryCollection entriesAtPoint: 205 @ 5) isEmpty.
+	copy remove: box1.
+	copy remove: box2.
+	self assert: entryCollection size equals: 2.
+	self assert: (entryCollection entriesAtPoint: 5 @ 5) asArray equals: { box1 }.
+	self assert: (copy entriesAtPoint: 205 @ 5) asArray equals: { box3 }
+]

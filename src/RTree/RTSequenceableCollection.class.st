@@ -44,6 +44,12 @@ RTSequenceableCollection >> initialize [
 	entries := OrderedCollection new
 ]
 
+{ #category : 'copying' }
+RTSequenceableCollection >> postCopy [
+	super postCopy.
+	entries := entries copy
+]
+
 { #category : 'shapes - ordering' }
 RTSequenceableCollection >> pushBack: anRTEntry [
 	entries remove: anRTEntry; addFirst: anRTEntry

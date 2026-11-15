@@ -287,6 +287,13 @@ RTNode >> nodesWithPoint: aPoint list: aCollection [
 	]
 ]
 
+{ #category : 'copying' }
+RTNode >> postCopy [
+	super postCopy.
+	left := left copy.
+	right := right copy
+]
+
 { #category : 'accessing' }
 RTNode >> rectangle [
 	^ rectangle
